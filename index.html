@@ -388,6 +388,11 @@ document.getElementById('globalSearch').addEventListener('input', function() {
 
 // ── Init ──
 loadPage('dashboard');
+
+// ── Service Worker ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(e) { console.log('SW:', e); });
+}
 </script>
 </body>
 </html>
