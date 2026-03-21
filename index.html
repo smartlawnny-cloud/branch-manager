@@ -243,6 +243,9 @@
       <button class="nav-item" data-page="insights"><span class="icon">📊</span> Insights</button>
       <button class="nav-item" data-page="reviews"><span class="icon">⭐</span> Reviews</button>
 
+      <div class="nav-section">Team</div>
+      <button class="nav-item" data-page="timesheet"><span class="icon">⏱️</span> Timesheet</button>
+
       <div class="nav-section">Tools</div>
       <button class="nav-item" data-page="calculators"><span class="icon">🧮</span> Calculators</button>
       <button class="nav-item" data-page="settings"><span class="icon">⚙️</span> Settings</button>
@@ -287,6 +290,8 @@
 <script src="src/pages/settings.js"></script>
 <script src="src/pages/propertymap.js"></script>
 <script src="src/pdf.js"></script>
+<script src="src/pages/reviews.js"></script>
+<script src="src/pages/timetrack.js"></script>
 <script>
 // ── Navigation ──
 var currentPage = 'dashboard';
@@ -318,6 +323,7 @@ var pageConfigs = {
   invoices: { title: 'Invoices', action: null },
   insights: { title: 'Insights', action: null },
   reviews: { title: 'Reviews', action: null },
+  timesheet: { title: 'Timesheet', action: null },
   calculators: { title: 'Calculators', action: null },
   settings: { title: 'Settings', action: null }
 };
@@ -331,6 +337,8 @@ var pageRenderers = {
   jobs: function() { return JobsPage.render(); },
   invoices: function() { return InvoicesPage.render(); },
   insights: function() { return InsightsPage.render(); },
+  reviews: function() { return ReviewsPage.render(); },
+  timesheet: function() { return TimeTrackPage.renderClockWidget() + TimeTrackPage.renderTimesheet(); },
   settings: function() { return SettingsPage.render(); },
   calculators: function() {
     return '<div class="stat-grid">'

@@ -16,6 +16,9 @@ var DashboardPage = {
       + UI.statCard('Active Jobs', stats.activeJobs.toString(), 'In progress', '', '', "loadPage('jobs')")
       + '</div>';
 
+    // Time clock widget
+    html += TimeTrackPage.renderClockWidget();
+
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
 
     // Upcoming Jobs
