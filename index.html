@@ -5,88 +5,139 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Branch Manager</title>
 <meta name="description" content="Second Nature Tree Service — Job Management">
-<meta name="theme-color" content="#1a3c12">
+<meta name="theme-color" content="#1a8a5c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Branch Manager">
 <link rel="manifest" href="manifest.json">
+<script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   :root {
-    --green-dark: #1a3c12;
-    --green: #2d5a27;
-    --green-light: #4a8a10;
-    --green-bg: #f0f8e8;
+    --green-dark: #1a8a5c;
+    --green: #22a96b;
+    --green-light: #7ac143;
+    --green-bg: #f0f9f4;
     --white: #ffffff;
-    --bg: #f5f6f8;
-    --text: #1d1d1f;
-    --text-light: #666;
-    --border: #e0e0e0;
-    --red: #c0392b;
-    --orange: #e67e22;
-    --blue: #2980b9;
+    --bg: #f7f8fa;
+    --text: #2d3748;
+    --text-light: #8492a6;
+    --border: #e8ecf1;
+    --red: #e53e3e;
+    --orange: #ed8936;
+    --blue: #4299e1;
     --sidebar-w: 240px;
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e8ecf1;
+    --sidebar-hover: #f0f9f4;
+    --sidebar-active: #e6f6ee;
+    --accent: #1a8a5c;
   }
+  [data-theme="dark"] {
+    --green-bg: #1a2e23;
+    --white: #1e2128;
+    --bg: #15171c;
+    --text: #e2e8f0;
+    --text-light: #8492a6;
+    --border: #2d3748;
+    --sidebar-bg: #1a1d24;
+    --sidebar-border: #2d3748;
+    --sidebar-hover: #1a2e23;
+    --sidebar-active: #1a3328;
+  }
+  [data-theme="dark"] .data-table th { background:#1a1d24; }
+  [data-theme="dark"] .stat-card { background:var(--white); }
+  [data-theme="dark"] .modal { background:#1e2128; color:var(--text); }
+  [data-theme="dark"] .modal-header { border-color:var(--border); }
+  [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea { background:#2d3748; color:var(--text); border-color:#4a5568; }
+  [data-theme="dark"] .toast { background:#2d3748; color:#e2e8f0; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; font-size:14px; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   /* ── Layout ── */
   .app { display:flex; height:100vh; }
 
-  /* ── Sidebar ── */
+  /* ── Sidebar (Jobber-style light) ── */
   .sidebar {
-    width:var(--sidebar-w); background:var(--green-dark); color:var(--white);
+    width:var(--sidebar-w); background:var(--sidebar-bg); color:var(--text);
     display:flex; flex-direction:column; flex-shrink:0;
-    transition: transform 0.25s ease;
-    z-index:100;
+    transition: width 0.2s ease, transform 0.25s ease;
+    z-index:100; border-right:1px solid var(--sidebar-border);
+    overflow:hidden;
   }
+  .sidebar.collapsed { width:56px; }
+  .sidebar.collapsed .sidebar-header h1,
+  .sidebar.collapsed .sidebar-user,
+  .sidebar.collapsed .nav-section,
+  .sidebar.collapsed .nav-item span:not(.icon),
+  .sidebar.collapsed .nav-item .badge,
+  .sidebar.collapsed > div[style*="padding"]:not(.sidebar-footer) { display:none !important; }
+  .sidebar.collapsed .sidebar-footer { padding:8px !important; justify-content:center; }
+  .sidebar.collapsed .sidebar-footer .log-out-btn { display:none !important; }
+  .sidebar.collapsed .sidebar-header { justify-content:center; padding:14px 8px; cursor:pointer; }
+  .sidebar.collapsed .nav-item { justify-content:center; padding:10px 0; font-size:0; overflow:hidden; }
+  .sidebar.collapsed .nav-item .icon { width:auto; font-size:16px; }
+  .sidebar.collapsed .nav-item .icon i, .sidebar.collapsed .nav-item .icon svg { width:20px; height:20px; }
+  .sidebar.collapsed .create-btn { font-size:0; padding:10px; }
+  .sidebar.collapsed .create-btn::before { content:'+'; font-size:18px; font-weight:700; }
   .sidebar-header {
-    padding:20px 16px 16px; border-bottom:1px solid rgba(255,255,255,.1);
+    padding:16px 14px 14px; border-bottom:1px solid var(--sidebar-border);
+    display:flex; align-items:center; gap:10px;
   }
+  .sidebar-logo {
+    width:32px; height:32px; flex-shrink:0;
+  }
+  .sidebar-logo svg { width:32px; height:32px; }
   .sidebar-header h1 {
-    font-size:18px; font-weight:800; letter-spacing:-.02em;
+    font-size:14px; font-weight:700; color:var(--text); line-height:1.25; letter-spacing:-.01em;
   }
-  .sidebar-header h1 span { display:block; font-size:11px; font-weight:400; opacity:.6; margin-top:2px; }
+  .sidebar-header h1 span { display:block; font-size:10px; font-weight:500; color:var(--text-light); margin-top:1px; letter-spacing:0; }
   .sidebar-user {
-    padding:12px 16px; font-size:12px; opacity:.7; border-bottom:1px solid rgba(255,255,255,.1);
+    padding:10px 16px; font-size:12px; color:var(--text-light); border-bottom:1px solid var(--sidebar-border);
   }
 
-  .sidebar-nav { flex:1; padding:8px 0; overflow-y:auto; }
-  .nav-section { padding:12px 16px 4px; font-size:10px; text-transform:uppercase; letter-spacing:.1em; opacity:.4; font-weight:700; }
+  .sidebar-nav { flex:1; padding:8px 8px; overflow-y:auto; }
+  .nav-section { padding:16px 8px 6px; font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-light); font-weight:700; }
   .nav-item {
-    display:flex; align-items:center; gap:10px; padding:10px 16px;
-    font-size:14px; color:rgba(255,255,255,.75); cursor:pointer;
-    transition: all 0.15s; text-decoration:none; border:none; background:none; width:100%;
+    display:flex; align-items:center; gap:10px; padding:8px 10px;
+    font-size:13px; color:var(--text-light); cursor:pointer;
+    transition: all 0.12s; text-decoration:none; border:none; background:none; width:100%;
+    border-radius:6px; margin-bottom:1px; border-left:none;
   }
-  .nav-item:hover { background:rgba(255,255,255,.08); color:#fff; }
-  .nav-item.active { background:rgba(255,255,255,.15); color:#fff; font-weight:600; border-left:3px solid #6abb1e; }
-  .nav-item .icon { width:20px; text-align:center; font-size:16px; }
-  .nav-item .badge { margin-left:auto; background:#c0392b; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; }
+  .nav-item:hover { background:var(--sidebar-hover); color:var(--text); }
+  .nav-item.active { background:var(--sidebar-active); color:var(--accent); font-weight:600; }
+  .nav-item .icon { width:20px; text-align:center; font-size:14px; display:flex; align-items:center; justify-content:center; }
+  .nav-item .li { width:18px; height:18px; stroke:var(--text-light); stroke-width:1.75; }
+  .nav-item:hover .li { stroke:var(--text); }
+  .nav-item.active .li { stroke:var(--accent); }
+  .nav-item .badge { margin-left:auto; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; min-width:18px; text-align:center; }
 
   .sidebar-footer {
-    padding:12px 16px; border-top:1px solid rgba(255,255,255,.1);
-    font-size:11px; opacity:.5;
+    padding:10px 16px; border-top:1px solid var(--sidebar-border);
+    font-size:10px; color:var(--text-light);
   }
 
-  /* ── Main Content ── */
+  /* ── Main Content (Jobber style) ── */
   .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
   .topbar {
     display:flex; align-items:center; justify-content:space-between;
-    padding:12px 24px; background:var(--white); border-bottom:1px solid var(--border);
+    padding:12px 28px; background:var(--white); border-bottom:1px solid var(--border);
     min-height:56px;
   }
-  .topbar h2 { font-size:20px; font-weight:700; }
+  .topbar h2 { font-size:20px; font-weight:700; color:var(--text); letter-spacing:-.01em; }
   .topbar-actions { display:flex; gap:8px; align-items:center; }
 
   .btn {
     display:inline-flex; align-items:center; gap:6px;
-    padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600;
-    cursor:pointer; border:none; transition:all .15s; text-decoration:none;
+    padding:8px 16px; border-radius:6px; font-size:13px; font-weight:600;
+    cursor:pointer; border:none; transition:all .12s; text-decoration:none;
   }
-  .btn-primary { background:var(--green-dark); color:var(--white); }
-  .btn-primary:hover { background:var(--green); }
+  .btn-primary { background:var(--accent); color:var(--white); }
+  .btn-primary:hover { background:#15775a; }
   .btn-outline { background:var(--white); color:var(--text); border:1px solid var(--border); }
-  .btn-outline:hover { background:var(--bg); }
+  .btn-outline:hover { background:var(--bg); border-color:#9ca3af; }
+  .btn-danger { background:#dc3545; color:#fff; }
 
   .content { flex:1; overflow-y:auto; padding:24px; }
 
@@ -99,51 +150,91 @@
     display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:99;
   }
 
-  /* ── Dashboard Cards ── */
-  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px; }
+  /* ── Dashboard Cards (Jobber style) ── */
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px; }
   .stat-card {
-    background:var(--white); border-radius:12px; padding:20px;
+    background:var(--white); border-radius:8px; padding:16px 18px;
     border:1px solid var(--border); position:relative;
+    transition: box-shadow .15s;
   }
-  .stat-card .stat-label { font-size:12px; color:var(--text-light); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
-  .stat-card .stat-value { font-size:28px; font-weight:800; color:var(--green-dark); }
-  .stat-card .stat-sub { font-size:12px; color:var(--text-light); margin-top:4px; }
+  .stat-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .stat-card .stat-label { font-size:11px; color:var(--text-light); text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px; font-weight:600; }
+  .stat-card .stat-value { font-size:26px; font-weight:800; color:var(--text); }
+  .stat-card .stat-sub { font-size:12px; color:var(--text-light); margin-top:2px; }
   .stat-card .stat-trend { font-size:11px; font-weight:700; }
-  .stat-card .stat-trend.up { color:#27ae60; }
+  .stat-card .stat-trend.up { color:#16a34a; }
   .stat-card .stat-trend.down { color:var(--red); }
 
-  /* ── Tables ── */
-  .data-table { width:100%; border-collapse:collapse; background:var(--white); border-radius:12px; overflow:hidden; border:1px solid var(--border); }
-  .data-table th { background:var(--bg); padding:10px 16px; text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-light); border-bottom:1px solid var(--border); }
-  .data-table td { padding:12px 16px; font-size:14px; border-bottom:1px solid #f0f0f0; }
-  .data-table tr:hover { background:#fafafa; cursor:pointer; }
+  /* ── Tables (Jobber style) ── */
+  .data-table { width:100%; border-collapse:collapse; background:var(--white); border-radius:8px; overflow:hidden; border:1px solid var(--border); }
+  .data-table th { background:#f9fafb; padding:8px 16px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-light); border-bottom:1px solid var(--border); }
+  .data-table td { padding:10px 16px; font-size:13px; border-bottom:1px solid #f3f4f6; }
+  .data-table tr:hover { background:#f9fafb; cursor:pointer; }
   .data-table tr:last-child td { border:none; }
 
+  /* ── Status Badges (Jobber colors) ── */
   .status-badge {
-    display:inline-block; padding:3px 10px; border-radius:12px;
-    font-size:11px; font-weight:700;
+    display:inline-block; padding:2px 10px; border-radius:12px;
+    font-size:11px; font-weight:600; letter-spacing:.01em;
   }
-  .status-active { background:#e8f5e9; color:#2e7d32; }
-  .status-lead { background:#e3f2fd; color:#1565c0; }
-  .status-late { background:#ffebee; color:#c62828; }
-  .status-paid { background:#e8f5e9; color:#2e7d32; }
-  .status-draft { background:#f5f5f5; color:#666; }
-  .status-sent { background:#fff3e0; color:#e65100; }
-  .status-new { background:#e3f2fd; color:#1565c0; }
+  .status-active { background:#e6f6ee; color:#1a8a5c; }
+  .status-lead { background:#e8f0fe; color:#2b6cb0; }
+  .status-late { background:#fde8e8; color:#c53030; }
+  .status-paid { background:#e6f6ee; color:#1a8a5c; }
+  .status-draft { background:#edf2f7; color:#718096; }
+  .status-sent { background:#fefcbf; color:#975a16; }
+  .status-new { background:#e8f0fe; color:#2b6cb0; }
+  .status-completed { background:#e6f6ee; color:#1a8a5c; }
+  .status-scheduled { background:#ebf4ff; color:#3182ce; }
+  .status-in_progress, .status-in-progress { background:#fefcbf; color:#975a16; }
+  .status-awaiting, .status-awaiting_response, .status-awaiting_payment { background:#fefcbf; color:#975a16; }
+  .status-approved, .status-converted { background:#e6f6ee; color:#1a8a5c; }
+  .status-declined, .status-cancelled, .status-past_due, .status-overdue { background:#fde8e8; color:#c53030; }
+  .status-archived, .status-inactive { background:#edf2f7; color:#718096; }
 
-  /* ── Search ── */
-  .search-box {
-    display:flex; align-items:center; gap:8px; padding:8px 14px;
-    background:var(--bg); border:1px solid var(--border); border-radius:8px;
-    font-size:14px; min-width:250px;
+  /* ── Filter Buttons ── */
+  .filter-btn {
+    padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600;
+    border:1px solid var(--border); background:var(--white); color:var(--text-light);
+    cursor:pointer; transition:all .12s;
   }
-  .search-box input { border:none; background:none; outline:none; flex:1; font-size:14px; }
+  .filter-btn:hover { border-color:#9ca3af; color:var(--text); }
+  .filter-btn.active, .filter-btn[style*="background:var(--green-dark)"] { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
+
+  /* ── Search (Jobber style) ── */
+  .search-box {
+    display:flex; align-items:center; gap:8px; padding:7px 12px;
+    background:#f9fafb; border:1px solid var(--border); border-radius:6px;
+    font-size:13px; min-width:240px;
+  }
+  .search-box:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px rgba(26,138,92,.15); }
+  .search-box input { border:none; background:none; outline:none; flex:1; font-size:13px; }
 
   /* ── Empty state ── */
-  .empty-state { text-align:center; padding:60px 20px; color:var(--text-light); }
-  .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
-  .empty-state h3 { font-size:18px; color:var(--text); margin-bottom:8px; }
-  .empty-state p { font-size:14px; max-width:400px; margin:0 auto; }
+  .empty-state { text-align:center; padding:48px 20px; color:var(--text-light); }
+  .empty-state .empty-icon { font-size:40px; margin-bottom:10px; }
+  .empty-state h3 { font-size:16px; color:var(--text); margin-bottom:6px; font-weight:600; }
+  .empty-state p { font-size:13px; max-width:380px; margin:0 auto; }
+
+  /* ── Mobile Bottom Nav ── */
+  .bottom-nav {
+    display:none; position:fixed; bottom:0; left:0; right:0; z-index:150;
+    background:var(--white); border-top:1px solid var(--border);
+    padding:4px 0 env(safe-area-inset-bottom, 4px);
+    box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  }
+  .bottom-nav-inner {
+    display:flex; justify-content:space-around; align-items:center;
+  }
+  .bottom-nav-btn {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:none; border:none; padding:6px 12px; cursor:pointer;
+    font-size:10px; color:var(--text-light); font-weight:600;
+    transition:color .15s;
+  }
+  .bottom-nav-btn.active { color:var(--accent); }
+  .bottom-nav-btn .bnav-icon { font-size:20px; display:block; margin:0 auto 2px; }
+  .bottom-nav-btn svg.bnav-icon { width:22px; height:22px; }
 
   /* ── Responsive ── */
   @media (max-width: 768px) {
@@ -152,12 +243,29 @@
     .sidebar-overlay.open { display:block; }
     .hamburger { display:block; }
     .stat-grid { grid-template-columns:1fr 1fr; }
-    .content { padding:16px; }
+    .content { padding:16px; padding-bottom:80px; }
     .topbar { padding:12px 16px; }
     .search-box { min-width:auto; flex:1; }
+    .bottom-nav { display:block; }
+    .detail-grid { grid-template-columns:1fr !important; }
+    .option-grid { grid-template-columns:1fr !important; }
   }
   @media (max-width: 480px) {
     .stat-grid { grid-template-columns:1fr; }
+  }
+
+  /* ── Print ── */
+  @media print {
+    .sidebar, .bottom-nav, .topbar, .modal-overlay, .sidebar-overlay, #inv-bulk-bar { display:none !important; }
+    .app { display:block !important; }
+    .content-area { margin-left:0 !important; }
+    .content { overflow:visible !important; height:auto !important; padding:0 !important; }
+    body { background:#fff !important; color:#000 !important; overflow:visible !important; height:auto !important; }
+    .stat-card { border:1px solid #ccc !important; break-inside:avoid; }
+    .data-table { font-size:11px; }
+    .data-table th { background:#f0f0f0 !important; }
+    .btn, button { display:none !important; }
+    a { color:#000 !important; text-decoration:none !important; }
   }
 
   /* ── Modals ── */
@@ -207,8 +315,50 @@
     z-index:300; transition:transform .3s; box-shadow:0 4px 20px rgba(0,0,0,.2);
   }
   .toast.show { transform:translateX(-50%) translateY(0); }
-  .toast-success { background:var(--green-dark); color:var(--white); }
+  .toast-success { background:var(--accent); color:var(--white); }
   .toast-error { background:var(--red); color:var(--white); }
+
+  /* ── Topbar Icons (Jobber style) ── */
+  .topbar-icons {
+    display:flex; align-items:center; gap:2px; margin-left:8px;
+  }
+  .topbar-icon {
+    position:relative; width:36px; height:36px; border-radius:8px; border:none;
+    background:transparent; cursor:pointer; display:flex; align-items:center;
+    justify-content:center; font-size:16px; transition:background .12s;
+  }
+  .topbar-icon:hover { background:var(--bg); }
+  .topbar-dot {
+    position:absolute; top:6px; right:6px; width:8px; height:8px;
+    background:var(--red); border-radius:50%; display:none;
+    border:2px solid var(--white);
+  }
+  .topbar-dot.active { display:block; }
+
+  .topbar-avatar {
+    position:relative; width:34px; height:34px; border-radius:50%;
+    background:var(--accent); color:#fff; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:700; cursor:pointer;
+    margin-left:6px; user-select:none;
+  }
+  .avatar-menu {
+    display:none; position:absolute; top:42px; right:0; width:200px;
+    background:var(--white); border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.15);
+    border:1px solid var(--border); z-index:300; overflow:hidden;
+  }
+  .avatar-menu.open { display:block; }
+  .avatar-menu-header {
+    padding:14px 16px; font-size:14px; font-weight:700; color:var(--text);
+    border-bottom:1px solid var(--border); line-height:1.3;
+  }
+  .avatar-menu-header span { font-size:12px; font-weight:400; color:var(--text-light); }
+  .avatar-menu button {
+    display:flex; align-items:center; gap:8px; width:100%; padding:10px 16px;
+    font-size:13px; border:none; background:none; cursor:pointer; color:var(--text);
+    text-align:left;
+  }
+  .avatar-menu button:hover { background:var(--bg); }
+  .avatar-menu hr { border:none; border-top:1px solid var(--border); margin:0; }
 
   /* ── Filter buttons ── */
   .client-filter.active { background:var(--green-dark) !important; color:var(--white) !important; border-color:var(--green-dark) !important; }
@@ -222,42 +372,73 @@
 
   <!-- Sidebar -->
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <h1>🌳 Branch Manager <span>Second Nature Tree Service</span></h1>
+    <div class="sidebar-header" onclick="if(document.getElementById('sidebar').classList.contains('collapsed'))toggleSidebar()">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="7" fill="#1a8a5c"/>
+          <path d="M16 6c-3.5 0-6.5 3-6.5 6.5 0 2.5 1.5 4.5 3.5 5.5v0c-.5.2-3.5 1-5 2.5 1.5-.5 3.5-.5 4.5-.3-1 .5-2.5 1.5-3 2.8 1-.8 2.5-1.2 3.5-1.2-.5.5-1 1.5-1 2.5h2v2h4v-2h2c0-1-.5-2-1-2.5 1 0 2.5.4 3.5 1.2-.5-1.3-2-2.3-3-2.8 1-.2 3-.2 4.5.3-1.5-1.5-4.5-2.3-5-2.5 2-1 3.5-3 3.5-5.5C22.5 9 19.5 6 16 6z" fill="white" opacity=".95"/>
+          <rect x="15" y="22" width="2" height="5" rx="1" fill="white" opacity=".7"/>
+        </svg>
+      </div>
+      <h1>Branch Manager <span>Second Nature Tree Service</span></h1>
     </div>
-    <div class="sidebar-user">Doug Brown &bull; Owner</div>
-    <div style="padding:8px 16px;">
-      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="QuickCreate.show()">+ Create New</button>
+    <div style="padding:10px 14px 8px;">
+      <button class="btn btn-primary create-btn" style="width:100%;justify-content:center;padding:9px;font-size:13px;font-weight:600;border-radius:6px;" onclick="QuickCreate.show()">+ Create New</button>
     </div>
 
     <div class="sidebar-nav">
-      <div class="nav-section">Main</div>
-      <button class="nav-item active" data-page="dashboard"><span class="icon">🏠</span> Dashboard</button>
-      <button class="nav-item" data-page="pipeline"><span class="icon">📊</span> Pipeline</button>
-      <button class="nav-item" data-page="schedule"><span class="icon">📅</span> Schedule</button>
+      <!-- Core navigation (Jobber order) -->
+      <button class="nav-item active" data-page="dashboard"><span class="icon"><i data-lucide="layout-dashboard" class="li"></i></span> Home</button>
+      <button class="nav-item" data-page="schedule"><span class="icon"><i data-lucide="calendar" class="li"></i></span> Schedule</button>
+      <button class="nav-item" data-page="clients"><span class="icon"><i data-lucide="users" class="li"></i></span> Clients <span class="badge" id="badge-clients"></span></button>
+      <button class="nav-item" data-page="requests"><span class="icon"><i data-lucide="inbox" class="li"></i></span> Requests <span class="badge" id="badge-requests"></span></button>
+      <button class="nav-item" data-page="quotes"><span class="icon"><i data-lucide="file-text" class="li"></i></span> Quotes</button>
+      <button class="nav-item" data-page="jobs"><span class="icon"><i data-lucide="wrench" class="li"></i></span> Jobs</button>
+      <button class="nav-item" data-page="invoices"><span class="icon"><i data-lucide="receipt" class="li"></i></span> Invoices</button>
 
-      <div class="nav-section">Work</div>
-      <button class="nav-item" data-page="clients"><span class="icon">👥</span> Clients <span class="badge" id="badge-clients"></span></button>
-      <button class="nav-item" data-page="requests"><span class="icon">📥</span> Requests <span class="badge" id="badge-requests"></span></button>
-      <button class="nav-item" data-page="quotes"><span class="icon">📋</span> Quotes</button>
-      <button class="nav-item" data-page="jobs"><span class="icon">🔧</span> Jobs</button>
-      <button class="nav-item" data-page="invoices"><span class="icon">💰</span> Invoices</button>
+      <div style="border-top:1px solid var(--sidebar-border);margin:6px 8px;"></div>
 
-      <div class="nav-section">Reports</div>
-      <button class="nav-item" data-page="insights"><span class="icon">📊</span> Insights</button>
-      <button class="nav-item" data-page="reviews"><span class="icon">⭐</span> Reviews</button>
+      <button class="nav-item" data-page="pipeline"><span class="icon"><i data-lucide="kanban" class="li"></i></span> Pipeline</button>
+      <button class="nav-item" data-page="timesheet"><span class="icon"><i data-lucide="clock" class="li"></i></span> Timesheets</button>
+      <button class="nav-item" data-page="expenses"><span class="icon"><i data-lucide="trending-up" class="li"></i></span> Expenses</button>
+      <button class="nav-item" data-page="insights"><span class="icon"><i data-lucide="bar-chart-3" class="li"></i></span> Reporting</button>
 
-      <div class="nav-section">Team</div>
-      <button class="nav-item" data-page="team"><span class="icon">👷</span> Team</button>
-      <button class="nav-item" data-page="timesheet"><span class="icon">⏱️</span> Timesheet</button>
-      <button class="nav-item" data-page="automations"><span class="icon">🤖</span> Automations</button>
+      <div style="border-top:1px solid var(--sidebar-border);margin:6px 8px;"></div>
 
-      <div class="nav-section">Tools</div>
-      <button class="nav-item" data-page="calculators"><span class="icon">🧮</span> Calculators</button>
-      <button class="nav-item" data-page="settings"><span class="icon">⚙️</span> Settings</button>
+      <button class="nav-item" data-page="team"><span class="icon"><i data-lucide="hard-hat" class="li"></i></span> Team</button>
+      <button class="nav-item" data-page="automations"><span class="icon"><i data-lucide="puzzle" class="li"></i></span> Apps</button>
+      <button class="nav-item" data-page="settings"><span class="icon"><i data-lucide="settings" class="li"></i></span> Settings</button>
+
+      <!-- Extra tools (expandable) -->
+      <div class="nav-section" style="cursor:pointer;" onclick="var el=document.getElementById('more-nav');el.style.display=el.style.display==='none'?'block':'none';this.querySelector('.more-arrow').textContent=el.style.display==='none'?'▸':'▾';">More <span class="more-arrow" style="float:right;">▸</span></div>
+      <div id="more-nav" style="display:none;">
+        <button class="nav-item" data-page="calculators"><span class="icon"><i data-lucide="calculator" class="li"></i></span> Calculators</button>
+        <button class="nav-item" data-page="crewview"><span class="icon"><i data-lucide="shield" class="li"></i></span> Crew View</button>
+        <button class="nav-item" data-page="employeecenter"><span class="icon"><i data-lucide="wallet" class="li"></i></span> My Pay</button>
+        <button class="nav-item" data-page="budget"><span class="icon"><i data-lucide="piggy-bank" class="li"></i></span> Budget Planner</button>
+        <button class="nav-item" data-page="dispatch"><span class="icon"><i data-lucide="truck" class="li"></i></span> Dispatch</button>
+        <button class="nav-item" data-page="clientmap"><span class="icon"><i data-lucide="map-pin" class="li"></i></span> Client Map</button>
+        <button class="nav-item" data-page="photomap"><span class="icon"><i data-lucide="camera" class="li"></i></span> Photo Map</button>
+        <button class="nav-item" data-page="messaging"><span class="icon"><i data-lucide="message-square" class="li"></i></span> Messages</button>
+        <button class="nav-item" data-page="equipment"><span class="icon"><i data-lucide="cog" class="li"></i></span> Equipment</button>
+        <button class="nav-item" data-page="jobcosting"><span class="icon"><i data-lucide="dollar-sign" class="li"></i></span> Job Costing</button>
+        <button class="nav-item" data-page="recurring"><span class="icon"><i data-lucide="repeat" class="li"></i></span> Recurring Jobs</button>
+        <button class="nav-item" data-page="notifications"><span class="icon"><i data-lucide="bell" class="li"></i></span> Activity Feed</button>
+        <button class="nav-item" data-page="profitloss"><span class="icon"><i data-lucide="line-chart" class="li"></i></span> Profit & Loss</button>
+        <button class="nav-item" data-page="weeklysummary"><span class="icon"><i data-lucide="clipboard-list" class="li"></i></span> Weekly Summary</button>
+        <button class="nav-item" data-page="reviews"><span class="icon"><i data-lucide="star" class="li"></i></span> Reviews</button>
+        <button class="nav-item" data-page="reviewtools"><span class="icon"><i data-lucide="award" class="li"></i></span> Review Tools</button>
+        <button class="nav-item" data-page="reports"><span class="icon"><i data-lucide="download" class="li"></i></span> Reports</button>
+        <button class="nav-item" data-page="onlinebooking"><span class="icon"><i data-lucide="globe" class="li"></i></span> Online Booking</button>
+        <button class="nav-item" data-page="import"><span class="icon"><i data-lucide="upload" class="li"></i></span> Import Data</button>
+        <button class="nav-item" data-page="backup"><span class="icon"><i data-lucide="database" class="li"></i></span> Backup</button>
+      </div>
     </div>
 
-    <div class="sidebar-footer">Branch Manager v1.0</div>
+    <div class="sidebar-footer" style="display:flex;gap:6px;padding:10px 14px;">
+      <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;color:var(--text-light);flex:1;" title="Collapse sidebar">◀</button>
+      <button class="log-out-btn" onclick="Auth.logout()" style="background:none;border:1px solid #e8bcbc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:#c0392b;white-space:nowrap;" title="Log out">Log Out</button>
+    </div>
   </nav>
 
   <!-- Main Content -->
@@ -272,6 +453,24 @@
           <span>🔍</span>
           <input type="text" placeholder="Search clients, jobs..." id="globalSearch">
         </div>
+        <div class="topbar-icons">
+          <button class="topbar-icon" onclick="loadPage('notifications')" title="Notifications"><i data-lucide="bell" style="width:18px;height:18px;stroke:var(--text-light);stroke-width:1.75;"></i><span class="topbar-dot" id="notif-dot"></span></button>
+          <button class="topbar-icon" onclick="loadPage('messaging')" title="Messages"><i data-lucide="message-square" style="width:18px;height:18px;stroke:var(--text-light);stroke-width:1.75;"></i></button>
+          <button class="topbar-icon" onclick="QuickCreate.show()" title="Create New"><i data-lucide="plus" style="width:20px;height:20px;stroke:var(--accent);stroke-width:2.5;"></i></button>
+          <button class="topbar-icon" onclick="toggleDarkMode()" id="dark-mode-btn" title="Toggle dark mode" style="font-size:16px;">🌙</button>
+          <button class="topbar-icon" onclick="loadPage('settings')" title="Settings"><i data-lucide="settings" style="width:18px;height:18px;stroke:var(--text-light);stroke-width:1.75;"></i></button>
+          <div class="topbar-avatar" onclick="this.querySelector('.avatar-menu').classList.toggle('open')">
+            <span>DB</span>
+            <div class="avatar-menu">
+              <div class="avatar-menu-header">Doug Brown<br><span>Owner</span></div>
+              <button onclick="loadPage('employeecenter')">👤 My Account</button>
+              <button onclick="loadPage('settings')">⚙️ Settings</button>
+              <button onclick="window.open('https://peekskilltree.com','_blank')">🌐 View Website</button>
+              <hr>
+              <button onclick="Auth.logout()" style="color:var(--red);">🚪 Logout</button>
+            </div>
+          </div>
+        </div>
         <button class="btn btn-primary" id="pageAction" style="display:none;">+ New</button>
       </div>
     </div>
@@ -283,6 +482,7 @@
 </div>
 
 <!-- Module scripts -->
+<script src="src/auth.js"></script>
 <script src="src/db.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/pages/dashboard.js"></script>
@@ -293,6 +493,30 @@
 <script src="src/pages/invoices.js"></script>
 <script src="src/pages/schedule.js"></script>
 <script src="src/pages/insights.js"></script>
+<script src="src/geofence.js"></script>
+<script src="src/weather.js"></script>
+<script src="src/pages/comms.js"></script>
+<script src="src/pages/messaging.js"></script>
+<script src="src/pages/profitloss.js"></script>
+<script src="src/photos.js"></script>
+<script src="src/pages/clientmap.js"></script>
+<script src="src/pages/photomap.js"></script>
+<script src="src/pages/crewview.js"></script>
+<script src="src/pages/employeecenter.js"></script>
+<script src="src/pages/budget.js"></script>
+<script src="src/pages/equipment.js"></script>
+<script src="src/pages/jobcosting.js"></script>
+<script src="src/pages/dispatch.js"></script>
+<script src="src/pages/recurring.js"></script>
+<script src="src/pages/notifications.js"></script>
+<script src="src/pages/expenses.js"></script>
+<script src="src/email.js"></script>
+<script src="src/pages/reports.js"></script>
+<script src="src/pages/reviewtools.js"></script>
+<script src="src/pages/weeklysummary.js"></script>
+<script src="src/pages/backup.js"></script>
+<script src="src/pages/onlinebooking.js"></script>
+<script src="src/pages/import.js"></script>
 <script src="src/pages/settings.js"></script>
 <script src="src/pages/propertymap.js"></script>
 <script src="src/pages/estimator.js"></script>
@@ -312,6 +536,11 @@ if (!localStorage.getItem('bm-supabase-url')) {
 }
 </script>
 <script src="src/pdf.js"></script>
+<!-- photos.js moved earlier, before photomap.js -->
+<script src="src/templates.js"></script>
+<script src="src/supacloud.js"></script>
+<script src="src/pages/payments.js"></script>
+<script src="src/pages/workflow.js"></script>
 <script src="src/pages/reviews.js"></script>
 <script src="src/pages/timetrack.js"></script>
 <script>
@@ -330,8 +559,17 @@ document.querySelectorAll('.nav-item').forEach(function(btn) {
 });
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('open');
+  var sb = document.getElementById('sidebar');
+  var ov = document.getElementById('sidebarOverlay');
+  if (window.innerWidth <= 768) {
+    sb.classList.toggle('open');
+    ov.classList.toggle('open');
+  } else {
+    sb.classList.toggle('collapsed');
+    localStorage.setItem('bm-sidebar-collapsed', sb.classList.contains('collapsed'));
+    var btn = document.getElementById('sidebar-toggle-btn');
+    if (btn) btn.textContent = sb.classList.contains('collapsed') ? '▶' : '◀';
+  }
 }
 
 // ── Page Config ──
@@ -350,6 +588,25 @@ var pageConfigs = {
   timesheet: { title: 'Timesheet', action: null },
   automations: { title: 'Automations', action: null },
   calculators: { title: 'Calculators', action: null },
+  crewview: { title: 'Crew View', action: null },
+  employeecenter: { title: 'My Pay & Hours', action: null },
+  budget: { title: 'Budget Planner', action: null },
+  dispatch: { title: 'Dispatch', action: '🗺 Open Route', actionFn: 'DispatchPage.openRoute()' },
+  clientmap: { title: 'Client Map', action: null },
+  photomap: { title: 'Photo Map', action: null },
+  messaging: { title: 'Messages', action: null },
+  equipment: { title: 'Equipment', action: '+ Add', actionFn: 'EquipmentPage.showForm()' },
+  jobcosting: { title: 'Job Costing', action: null },
+  recurring: { title: 'Recurring Jobs', action: null },
+  notifications: { title: 'Activity', action: null },
+  expenses: { title: 'Expenses', action: '+ Add Expense', actionFn: 'loadPage("expenses")' },
+  profitloss: { title: 'Profit & Loss', action: null },
+  weeklysummary: { title: 'Weekly Summary', action: null },
+  reviewtools: { title: 'Review Tools', action: null },
+  reports: { title: 'Reports & Exports', action: null },
+  onlinebooking: { title: 'Online Booking', action: null },
+  import: { title: 'Import Data', action: null },
+  backup: { title: 'Backup & Restore', action: null },
   settings: { title: 'Settings', action: null }
 };
 
@@ -367,6 +624,25 @@ var pageRenderers = {
   team: function() { return TeamPage.render(); },
   timesheet: function() { return TimeTrackPage.renderClockWidget() + TimeTrackPage.renderTimesheet(); },
   automations: function() { return AutomationsPage.render(); },
+  crewview: function() { return CrewView.render(); },
+  employeecenter: function() { return EmployeeCenter.render(); },
+  budget: function() { return BudgetPage.render(); },
+  dispatch: function() { return DispatchPage.render(); },
+  clientmap: function() { return ClientMapPage.render(); },
+  photomap: function() { return PhotoMap.render(); },
+  messaging: function() { return MessagingPage.render(); },
+  equipment: function() { return EquipmentPage.render(); },
+  jobcosting: function() { return JobCosting.render(); },
+  recurring: function() { return RecurringJobs.render(); },
+  notifications: function() { return NotificationsPage.render(); },
+  expenses: function() { return ExpensesPage.render(); },
+  profitloss: function() { return ProfitLossPage.render(); },
+  weeklysummary: function() { return WeeklySummary.render(); },
+  reviewtools: function() { return ReviewTools.render(); },
+  reports: function() { return ReportsPage.render(); },
+  onlinebooking: function() { return OnlineBooking.render(); },
+  import: function() { return ImportPage.render(); },
+  backup: function() { return BackupPage.render(); },
   settings: function() { return SettingsPage.render(); },
   calculators: function() {
     return '<div class="stat-grid">'
@@ -382,7 +658,44 @@ var pageRenderers = {
   }
 };
 
+// ── Auth Gate ──
+function checkAuth() {
+  if (!Auth.isLoggedIn()) {
+    var appEl = document.querySelector('.app');
+    var bottomNav = document.querySelector('.bottom-nav');
+    if (appEl) appEl.style.display = 'none';
+    if (bottomNav) bottomNav.style.display = 'none';
+    var loginDiv = document.getElementById('login-screen');
+    if (!loginDiv) {
+      loginDiv = document.createElement('div');
+      loginDiv.id = 'login-screen';
+      document.body.insertBefore(loginDiv, document.body.firstChild);
+    }
+    loginDiv.innerHTML = Auth.renderLogin();
+    return false;
+  }
+  var appEl = document.querySelector('.app');
+  var bottomNav = document.querySelector('.bottom-nav');
+  if (appEl) appEl.style.display = '';
+  if (bottomNav) bottomNav.style.display = '';
+  var loginDiv = document.getElementById('login-screen');
+  if (loginDiv) loginDiv.innerHTML = '';
+
+  // Update sidebar user info
+  var userEl = document.querySelector('.sidebar-user');
+  if (userEl) userEl.innerHTML = Auth.user.name + ' <span style="opacity:.6;">· ' + Auth.role.replace(/_/g, ' ') + '</span>';
+
+  // Hide nav items user can't access
+  document.querySelectorAll('.nav-item[data-page]').forEach(function(btn) {
+    var page = btn.dataset.page;
+    btn.style.display = Auth.canAccess(page) ? '' : 'none';
+  });
+
+  return true;
+}
+
 function loadPage(page) {
+  if (!checkAuth()) return;
   var config = pageConfigs[page] || { title: page, action: null };
   document.getElementById('pageTitle').textContent = config.title;
   var actionBtn = document.getElementById('pageAction');
@@ -445,11 +758,107 @@ var QuickCreate = {
 };
 
 // ── Init ──
-loadPage('dashboard');
+if (checkAuth()) {
+  loadPage('dashboard');
+}
 
 // ── Service Worker ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(function(e) { console.log('SW:', e); });
+}
+
+// Update bottom nav active state
+var origLoadPage = window.loadPage;
+var _loadPageWrapped = function(page) {
+  origLoadPage(page);
+  document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.page === page);
+  });
+};
+// Override only if loadPage exists
+if (typeof origLoadPage === 'function') {
+  window.loadPage = _loadPageWrapped;
+}
+
+// ── Dark Mode ──
+function toggleDarkMode() {
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+  localStorage.setItem('bm-dark-mode', isDark ? '' : 'dark');
+  var btn = document.getElementById('dark-mode-btn');
+  if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+}
+// Restore on load
+if (localStorage.getItem('bm-dark-mode') === 'dark') {
+  document.documentElement.setAttribute('data-theme', 'dark');
+  setTimeout(function() { var btn = document.getElementById('dark-mode-btn'); if (btn) btn.textContent = '☀️'; }, 100);
+}
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', function(e) {
+  // Don't trigger in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  // Don't trigger in modals
+  if (document.querySelector('.modal-overlay')) return;
+
+  var meta = e.metaKey || e.ctrlKey;
+
+  if (meta && e.key === 'k') { e.preventDefault(); document.getElementById('globalSearch').focus(); }
+  else if (meta && e.key === 'n') { e.preventDefault(); QuickCreate.show(); }
+  else if (e.key === '1') { loadPage('dashboard'); }
+  else if (e.key === '2') { loadPage('schedule'); }
+  else if (e.key === '3') { loadPage('clients'); }
+  else if (e.key === '4') { loadPage('quotes'); }
+  else if (e.key === '5') { loadPage('jobs'); }
+  else if (e.key === '6') { loadPage('invoices'); }
+  else if (e.key === '7') { loadPage('pipeline'); }
+  else if (e.key === '?') {
+    UI.showModal('Keyboard Shortcuts', '<div style="font-size:14px;line-height:2.2;">'
+      + '<div style="display:flex;justify-content:space-between;"><span>Search</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">⌘K</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Create New</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">⌘N</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Dashboard</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">1</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Schedule</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">2</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Clients</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">3</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Quotes</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">4</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Jobs</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">5</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Invoices</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">6</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Pipeline</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">7</kbd></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span>Help</span><kbd style="background:#f0f0f0;padding:2px 8px;border-radius:4px;font-size:12px;">?</kbd></div>'
+      + '</div>');
+  }
+});
+</script>
+
+<!-- Mobile Bottom Nav -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bottom-nav-btn active" data-page="dashboard" onclick="loadPage('dashboard')">
+      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+    </button>
+    <button class="bottom-nav-btn" data-page="schedule" onclick="loadPage('schedule')">
+      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule
+    </button>
+    <button class="bottom-nav-btn" onclick="QuickCreate.show()" style="position:relative;">
+      <span class="bnav-icon" style="background:var(--accent);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:-8px auto 0;">+</span>New
+    </button>
+    <button class="bottom-nav-btn" data-page="notifications" onclick="loadPage('notifications')">
+      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Activity
+    </button>
+    <button class="bottom-nav-btn" onclick="toggleSidebar()">
+      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>More
+    </button>
+  </div>
+</nav>
+<script>
+// Initialize Lucide icons after DOM is ready
+if (typeof lucide !== 'undefined') lucide.createIcons();
+// Re-init after page loads (for dynamically added icons)
+document.addEventListener('DOMContentLoaded', function() { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+// Restore sidebar state
+if (localStorage.getItem('bm-sidebar-collapsed') === 'true') {
+  document.getElementById('sidebar').classList.add('collapsed');
+  var tb = document.getElementById('sidebar-toggle-btn');
+  if (tb) tb.textContent = '▶';
 }
 </script>
 </body>

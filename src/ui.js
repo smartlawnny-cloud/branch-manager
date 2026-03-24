@@ -44,18 +44,26 @@ var UI = (function() {
   function moneyInt(n) { return '$' + Math.round(n || 0).toLocaleString(); }
   function dateShort(d) {
     if (!d) return '—';
-    var dt = new Date(d + 'T12:00:00');
+    var dt;
+    // Handle ISO timestamps (from Supabase) and plain dates
+    if (d.length > 10) {
+      dt = new Date(d);
+    } else {
+      dt = new Date(d + 'T12:00:00');
+    }
+    if (isNaN(dt.getTime())) return '—';
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return months[dt.getMonth()] + ' ' + dt.getDate() + ', ' + dt.getFullYear();
   }
   function dateRelative(d) {
     if (!d) return '—';
     var now = new Date(); var dt = new Date(d);
+    if (isNaN(dt.getTime())) return '—';
     var diff = Math.floor((now - dt) / 86400000);
     if (diff === 0) return 'Today';
     if (diff === 1) return 'Yesterday';
     if (diff < 7) return diff + ' days ago';
-    return dateShort(d.split('T')[0]);
+    return dateShort(d);
   }
   function phone(p) {
     if (!p) return '—';
@@ -122,6 +130,54 @@ var UI = (function() {
     setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 3000);
   }
 
+  // ── Loading Spinner ──
+  function showLoading(text) {
+    var el = document.getElementById('pageContent');
+    if (el) el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;">'
+      + '<div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;"></div>'
+      + '<span style="font-size:14px;color:var(--text-light);">' + (text || 'Loading...') + '</span></div>';
+  }
+
+  // ── Validate Required Fields ──
+  function validateForm(fields) {
+    var errors = [];
+    fields.forEach(function(f) {
+      var el = document.getElementById(f.id);
+      if (!el) return;
+      var val = el.value.trim();
+      if (f.required && !val) {
+        errors.push(f.label + ' is required');
+        el.style.borderColor = '#e53e3e';
+        el.style.background = '#fff5f5';
+      } else if (f.type === 'email' && val && !/\S+@\S+\.\S+/.test(val)) {
+        errors.push(f.label + ' must be a valid email');
+        el.style.borderColor = '#e53e3e';
+      } else if (f.type === 'phone' && val && val.replace(/\D/g,'').length < 10) {
+        errors.push(f.label + ' must be a valid phone number');
+        el.style.borderColor = '#e53e3e';
+      } else {
+        el.style.borderColor = '';
+        el.style.background = '';
+      }
+    });
+    if (errors.length) {
+      toast(errors[0], 'error');
+      return false;
+    }
+    return true;
+  }
+
+  // ── Time Ago (short) ──
+  function timeAgo(d) {
+    if (!d) return '';
+    var s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    if (s < 604800) return Math.floor(s/86400) + 'd ago';
+    return dateShort(d.split('T')[0]);
+  }
+
   return {
     showModal: showModal,
     closeModal: closeModal,
@@ -130,11 +186,14 @@ var UI = (function() {
     moneyInt: moneyInt,
     dateShort: dateShort,
     dateRelative: dateRelative,
+    timeAgo: timeAgo,
     phone: phone,
     formField: formField,
     statCard: statCard,
     emptyState: emptyState,
     confirm: confirm,
-    toast: toast
+    toast: toast,
+    showLoading: showLoading,
+    validateForm: validateForm
   };
 })();

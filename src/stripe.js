@@ -11,8 +11,13 @@ var Stripe = {
   // Will be set from settings
   publishableKey: null,
 
+  DEFAULT_PK: 'pk_live_51TDawDBGJHz1j102gKSfimIBsbD7OtFgtKtEG7wRjSEIRM0IEsyV3gBSXs5ESx8eRIK9EXfGYJk3lgKKyB5fFeJP00Zwn4B4ED',
+
   init: function() {
-    Stripe.publishableKey = localStorage.getItem('bm-stripe-pk') || null;
+    Stripe.publishableKey = localStorage.getItem('bm-stripe-pk') || Stripe.DEFAULT_PK;
+    if (Stripe.publishableKey && !localStorage.getItem('bm-stripe-pk')) {
+      localStorage.setItem('bm-stripe-pk', Stripe.publishableKey);
+    }
   },
 
   isConnected: function() {
