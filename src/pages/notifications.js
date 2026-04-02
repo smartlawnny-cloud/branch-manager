@@ -2,16 +2,23 @@
  * Branch Manager — Notification Center & Activity Feed
  */
 var NotificationsPage = {
+  _activeFilter: 'all',
+
   render: function() {
-    var activities = DB.getActivities ? DB.getActivities() : NotificationsPage._buildFeed();
-    var html = '<div class="section-header"><h2>Activity Feed</h2></div>';
+    var self = NotificationsPage;
+    var activities = DB.getActivities ? DB.getActivities() : self._buildFeed();
+    var filteredCount = self._hiddenOldCount || 0;
+    var html = '<div class="section-header"><h2>Activity Feed</h2>'
+      + (filteredCount > 0 ? '<span style="font-size:12px;color:var(--text-light);font-weight:400;">' + filteredCount + ' older entries hidden</span>' : '')
+      + '</div>';
 
     // Filter tabs
     html += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">';
     var filters = ['All', 'Requests', 'Quotes', 'Jobs', 'Invoices', 'Payments'];
     filters.forEach(function(f) {
-      var active = f === 'All' ? ' style="background:var(--green-dark);color:#fff;border-color:var(--green-dark);"' : '';
-      html += '<button onclick="NotificationsPage.filter(\'' + f.toLowerCase() + '\')" class="filter-btn"' + active + '>' + f + '</button>';
+      var isActive = f.toLowerCase() === self._activeFilter;
+      var style = isActive ? ' style="background:var(--green-dark);color:#fff;border-color:var(--green-dark);"' : '';
+      html += '<button onclick="NotificationsPage.filter(\'' + f.toLowerCase() + '\')" class="filter-btn"' + style + '>' + f + '</button>';
     });
     html += '</div>';
 
@@ -43,37 +50,95 @@ var NotificationsPage = {
       + '</div>';
   },
 
+  _hiddenOldCount: 0,
+
   _buildFeed: function() {
+    var self = NotificationsPage;
     var feed = [];
-    // Build from existing data
+    var ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
+    var thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    // Jobber import window — items "updated" on these days are import artifacts, not real activity
+    function isImportArtifact(d) {
+      if (!d) return false;
+      var day = d.substring(0, 10);
+      return day === '2026-03-21' || day === '2026-03-22';
+    }
+    var allCount = 0;
+
+    // Requests (last 90 days only)
     var requests = DB.requests.getAll();
     requests.forEach(function(r) {
-      feed.push({ type: 'request', title: 'New request from ' + r.clientName, description: r.property || r.notes || '', date: r.createdAt, unread: r.status === 'new' });
+      allCount++;
+      if (r.createdAt && r.createdAt < ninetyDaysAgo) return;
+      feed.push({ type: 'request', title: 'New request from ' + (r.clientName || 'Unknown'), description: r.property || r.notes || '', date: r.createdAt, unread: r.status === 'new' });
     });
+
+    // Quotes — only meaningful statuses, last 90 days, skip import-date artifacts
     var quotes = DB.quotes.getAll();
+    var activeStatuses = { sent: 1, awaiting: 1, approved: 1, declined: 1, converted: 1 };
     quotes.forEach(function(q) {
-      feed.push({ type: 'quote', title: 'Quote #' + (q.quoteNumber || '') + ' — ' + q.clientName, description: UI.money(q.total) + ' • ' + (q.status || ''), date: q.createdAt });
+      if (!activeStatuses[q.status]) return;
+      allCount++;
+      var actDate = q.updatedAt || q.createdAt;
+      if (!actDate || actDate < ninetyDaysAgo) return;
+      if (isImportArtifact(actDate)) return; // skip import artifacts
+      var statusLabels = { sent: 'Sent', awaiting: 'Awaiting changes', approved: 'Approved ✓', declined: 'Declined', converted: 'Converted to job' };
+      feed.push({ type: 'quote', title: 'Quote #' + (q.quoteNumber || '') + ' — ' + (q.clientName || ''), description: UI.money(q.total) + ' • ' + (statusLabels[q.status] || q.status), date: actDate });
     });
+
+    // Jobs completed (last 30 days)
+    var jobs = DB.jobs.getAll();
+    jobs.forEach(function(j) {
+      if (j.status !== 'completed') return;
+      allCount++;
+      var actDate = j.completedDate || j.scheduledDate || j.createdAt;
+      if (!actDate || actDate < ninetyDaysAgo) return;
+      if (isImportArtifact(actDate)) return; // skip import artifacts
+      feed.push({ type: 'job', title: 'Job #' + (j.jobNumber || '') + ' completed — ' + (j.clientName || ''), description: j.description || j.property || '', date: actDate });
+    });
+
+    // Invoices — paid (last 90 days) + outstanding always shown
     var invoices = DB.invoices.getAll();
+    var now = new Date();
     invoices.forEach(function(inv) {
       if (inv.status === 'paid') {
-        feed.push({ type: 'payment', title: 'Payment received — ' + inv.clientName, description: UI.money(inv.total) + ' • Invoice #' + (inv.invoiceNumber || ''), date: inv.updatedAt || inv.createdAt });
-      } else if (inv.balance > 0) {
-        feed.push({ type: 'invoice', title: 'Invoice #' + (inv.invoiceNumber || '') + ' outstanding', description: UI.money(inv.balance) + ' remaining • ' + inv.clientName, date: inv.createdAt, unread: true });
+        allCount++;
+        var paidDate = inv.paidDate || inv.updatedAt || inv.createdAt;
+        if (!paidDate || paidDate < ninetyDaysAgo) return;
+        if (isImportArtifact(paidDate)) return; // skip import artifacts
+        feed.push({ type: 'payment', title: 'Payment received — ' + (inv.clientName || ''), description: UI.money(inv.total) + ' • Invoice #' + (inv.invoiceNumber || ''), date: paidDate });
+      } else if (inv.balance > 0 && inv.status !== 'draft' && inv.status !== 'cancelled') {
+        var isOverdue = inv.dueDate && new Date(inv.dueDate) < now;
+        feed.push({ type: 'invoice', title: 'Invoice #' + (inv.invoiceNumber || '') + (isOverdue ? ' overdue' : ' outstanding'), description: UI.money(inv.balance) + ' remaining • ' + (inv.clientName || ''), date: inv.dueDate || inv.createdAt, unread: isOverdue });
       }
     });
+
     // Sort by date descending
     feed.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
-    return feed.slice(0, 50);
+    self._hiddenOldCount = Math.max(0, allCount - feed.length);
+    return feed.slice(0, 100);
   },
 
   filter: function(type) {
-    // Re-render with filter
+    NotificationsPage._activeFilter = type;
+    // Update button active states
+    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+      var isActive = btn.textContent.toLowerCase() === type;
+      btn.style.background = isActive ? 'var(--green-dark)' : '';
+      btn.style.color = isActive ? '#fff' : '';
+      btn.style.borderColor = isActive ? 'var(--green-dark)' : '';
+    });
+    // Filter and re-render list
     var activities = NotificationsPage._buildFeed();
     if (type !== 'all') {
       var typeMap = { requests: 'request', quotes: 'quote', jobs: 'job', invoices: 'invoice', payments: 'payment' };
       var filterType = typeMap[type] || type;
-      activities = activities.filter(function(a) { return a.type === filterType; });
+      // 'invoices' filter should include both invoice and payment types
+      if (type === 'invoices') {
+        activities = activities.filter(function(a) { return a.type === 'invoice' || a.type === 'payment'; });
+      } else {
+        activities = activities.filter(function(a) { return a.type === filterType; });
+      }
     }
     var listEl = document.getElementById('activity-list');
     if (listEl) {

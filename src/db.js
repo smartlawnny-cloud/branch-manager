@@ -126,12 +126,31 @@ var DB = (function() {
     getUpcoming: function() {
       var today = new Date().toISOString().split('T')[0];
       return getAll(KEYS.jobs).filter(function(j) {
-        return j.scheduledDate >= today && j.status !== 'completed';
+        return j.scheduledDate && j.scheduledDate.substring(0, 10) >= today && j.status !== 'completed';
       }).sort(function(a, b) { return (a.scheduledDate || '').localeCompare(b.scheduledDate || ''); });
     },
     getToday: function() {
       var today = new Date().toISOString().split('T')[0];
-      return getAll(KEYS.jobs).filter(function(j) { return j.scheduledDate === today; });
+      return getAll(KEYS.jobs).filter(function(j) {
+        return j.scheduledDate && j.scheduledDate.substring(0, 10) === today;
+      });
+    },
+    fixStatuses: function() {
+      var valid = ['scheduled', 'in_progress', 'completed', 'late', 'cancelled'];
+      var all = _get(KEYS.jobs);
+      var changed = 0;
+      all.forEach(function(j) {
+        if (valid.indexOf(j.status) === -1) {
+          var newStatus;
+          if (j.status === 'active') { newStatus = 'in_progress'; }
+          else if (j.status === 'unscheduled' || j.status === 'pending') { newStatus = 'scheduled'; }
+          else if (j.status === 'done' || j.status === 'invoiced') { newStatus = 'completed'; }
+          else { newStatus = 'scheduled'; }
+          jobs.update(j.id, { status: newStatus });
+          changed++;
+        }
+      });
+      return changed;
     }
   };
 
@@ -153,6 +172,21 @@ var DB = (function() {
     remove: function(id) { remove(KEYS.invoices, id); },
     search: function(q) { return search(KEYS.invoices, q); },
     count: function(filterFn) { return count(KEYS.invoices, filterFn); },
+    markOverdue: function() {
+      var today = new Date().toISOString().split('T')[0];
+      var all = _get(KEYS.invoices);
+      var changed = 0;
+      all.forEach(function(inv) {
+        if (inv.status === 'past_due') {
+          invoices.update(inv.id, { status: 'overdue' });
+          changed++;
+        } else if (inv.status !== 'paid' && inv.status !== 'cancelled' && inv.status !== 'overdue' && inv.status !== 'draft' && inv.dueDate && inv.dueDate.substring(0, 10) < today) {
+          invoices.update(inv.id, { status: 'overdue' });
+          changed++;
+        }
+      });
+      return changed;
+    },
     totalReceivable: function() {
       return getAll(KEYS.invoices).reduce(function(sum, inv) {
         if (inv.status !== 'paid') return sum + (inv.balance || inv.total || 0);
@@ -205,6 +239,33 @@ var DB = (function() {
     }
   };
 
+  // ── Expenses ──
+  var expenses = {
+    getAll: function() { try { return JSON.parse(localStorage.getItem('bm-expenses')) || []; } catch(e) { return []; } },
+    count: function() { return expenses.getAll().length; },
+    create: function(r) {
+      var all = expenses.getAll();
+      r.id = r.id || _id();
+      r.date = r.date || _now();
+      all.unshift(r);
+      localStorage.setItem('bm-expenses', JSON.stringify(all));
+      return r;
+    },
+    update: function(id, changes) {
+      var all = expenses.getAll();
+      var idx = all.findIndex(function(r) { return r.id === id; });
+      if (idx < 0) return null;
+      Object.assign(all[idx], changes);
+      localStorage.setItem('bm-expenses', JSON.stringify(all));
+      return all[idx];
+    },
+    remove: function(id) {
+      var all = expenses.getAll().filter(function(r) { return r.id !== id; });
+      localStorage.setItem('bm-expenses', JSON.stringify(all));
+    },
+    getById: function(id) { return expenses.getAll().find(function(r) { return r.id === id; }) || null; }
+  };
+
   // ── Time Entries ──
   var timeEntries = {
     getAll: function() { return getAll(KEYS.timeEntries); },
@@ -213,13 +274,18 @@ var DB = (function() {
     getByJob: function(jobId) { return getAll(KEYS.timeEntries).filter(function(t) { return t.jobId === jobId; }); },
     getByUser: function(userId, date) {
       return getAll(KEYS.timeEntries).filter(function(t) {
-        if (t.userId !== userId) return false;
-        if (date && t.date !== date) return false;
+        // Support both 'userId' (DB clockIn) and 'user' (crewview clockOut) field names
+        var entryUser = t.userId || t.user || '';
+        if (entryUser !== userId) return false;
+        if (date) {
+          var entryDate = (t.date || t.clockIn || '').substring(0, 10);
+          if (entryDate !== date) return false;
+        }
         return true;
       });
     },
     clockIn: function(userId, jobId) {
-      return create(KEYS.timeEntries, { userId: userId, jobId: jobId, date: new Date().toISOString().split('T')[0], clockIn: _now(), clockOut: null, hours: 0 });
+      return create(KEYS.timeEntries, { userId: userId, user: userId, jobId: jobId, date: new Date().toISOString().split('T')[0], clockIn: _now(), clockOut: null, hours: 0 });
     },
     clockOut: function(entryId) {
       var entry = getById(KEYS.timeEntries, entryId);
@@ -320,6 +386,7 @@ var DB = (function() {
     jobs: jobs,
     invoices: invoices,
     services: services,
+    expenses: expenses,
     timeEntries: timeEntries,
     dashboard: dashboard,
     importCSV: importCSV,

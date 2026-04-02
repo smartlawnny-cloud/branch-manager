@@ -2,7 +2,7 @@
  * Branch Manager — Jobs Page
  */
 var JobsPage = {
-  _page: 0, _perPage: 50, _search: '', _filter: 'all',
+  _page: 0, _perPage: 50, _search: '', _filter: 'all', _sortCol: 'jobNumber', _sortDir: 'desc',
 
   render: function() {
     var self = JobsPage;
@@ -12,57 +12,143 @@ var JobsPage = {
     var inProgress = all.filter(function(j) { return j.status === 'in_progress'; }).length;
     var completed = all.filter(function(j) { return j.status === 'completed'; }).length;
 
-    var html = '<div class="stat-grid">'
-      + UI.statCard('Late', late.toString(), 'Need attention', late > 0 ? 'down' : '', '', "JobsPage._setFilter('late')")
-      + UI.statCard('Scheduled', scheduled.toString(), 'Upcoming', '', '', "JobsPage._setFilter('scheduled')")
-      + UI.statCard('In Progress', inProgress.toString(), 'Active now', '', '', "JobsPage._setFilter('in_progress')")
-      + UI.statCard('Completed', completed.toString(), 'All time', '', '', "JobsPage._setFilter('completed')")
+    // Jobber-style stat cards row
+    var activeJobs = all.filter(function(j) { return j.status === 'in_progress' || j.status === 'scheduled'; });
+    var cutoff60 = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
+    var cutoff7 = new Date(Date.now() - 7 * 86400000).toISOString();
+    // Recent = jobs with scheduledDate in last 60 days (excludes old Jobber imports)
+    var recentNeedsInvoicing = all.filter(function(j) {
+      return j.status === 'completed' && !j.invoiceId
+        && ((j.scheduledDate && j.scheduledDate >= cutoff60)
+        || (!j.scheduledDate && (j.createdAt || '') > cutoff7));
+    });
+    var legacyNeedsInvoicing = all.filter(function(j) {
+      return j.status === 'completed' && !j.invoiceId
+        && !(j.scheduledDate && j.scheduledDate >= cutoff60)
+        && !(!j.scheduledDate && (j.createdAt || '') > cutoff7);
+    });
+    var needsInvoicing = recentNeedsInvoicing; // used for Overview stat
+    var actionReq = all.filter(function(j) { return j.status === 'action_required'; });
+    var unscheduled = all.filter(function(j) { return !j.scheduledDate; });
+    var recentVisits = all.filter(function(j) { var d = new Date(j.scheduledDate); var ago = new Date(); ago.setDate(ago.getDate()-30); return d >= ago && d <= new Date(); });
+    var upcomingVisits = all.filter(function(j) { var d = new Date(j.scheduledDate); var ahead = new Date(); ahead.setDate(ahead.getDate()+30); return d > new Date() && d <= ahead; });
+    var activeTotal = activeJobs.reduce(function(s,j){return s+(j.total||0);},0);
+    var upcomingTotal = upcomingVisits.reduce(function(s,j){return s+(j.total||0);},0);
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
+      // Overview
+      + '<div onclick="JobsPage._setFilter(\'all\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
+      + '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Overview</div>'
+      + '<div style="font-size:12px;"><span style="color:#dc3545;">●</span> Late (' + late + ')</div>'
+      + '<div style="font-size:12px;"><span style="color:#e6a817;">●</span> Requires Invoicing (' + needsInvoicing.length + ')</div>'
+      + '<div style="font-size:12px;"><span style="color:#fd7e14;">●</span> Action Required (' + actionReq.length + ')</div>'
+      + '<div style="font-size:12px;"><span style="color:#6c757d;">●</span> Unscheduled (' + unscheduled.length + ')</div>'
+      + '</div>'
+      // Recent visits
+      + '<div style="padding:14px 16px;border-right:1px solid var(--border);">'
+      + '<div style="font-size:14px;font-weight:700;">Recent visits</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">Past 30 days</div>'
+      + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + recentVisits.length + '</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">' + UI.moneyInt(activeTotal) + '</div>'
+      + '</div>'
+      // Visits scheduled
+      + '<div style="padding:14px 16px;border-right:1px solid var(--border);">'
+      + '<div style="font-size:14px;font-weight:700;">Visits scheduled</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">Next 30 days</div>'
+      + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + upcomingVisits.length + '</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">' + UI.moneyInt(upcomingTotal) + '</div>'
+      + '</div>'
+      // 4th card
+      + '<div style="padding:14px 16px;">'
+      + '<div style="font-size:14px;font-weight:700;">Total jobs</div>'
+      + '<div style="font-size:28px;font-weight:700;margin-top:12px;">' + all.length + '</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">All time</div>'
+      + '</div>'
       + '</div>';
 
-    // Search + filter
-    html += '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">'
-      + '<div style="flex:1;min-width:200px;position:relative;">'
-      + '<input type="text" placeholder="Search jobs..." value="' + self._search + '" oninput="JobsPage._search=this.value;JobsPage._page=0;loadPage(\'jobs\')" style="width:100%;padding:9px 12px 9px 34px;border:2px solid var(--border);border-radius:8px;font-size:14px;">'
-      + '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-light);">🔍</span></div>'
-      + '<div style="display:flex;gap:4px;">';
-    [['all', all.length], ['scheduled', scheduled], ['in_progress', inProgress], ['completed', completed], ['late', late]].forEach(function(f) {
-      if (f[0] === 'late' && f[1] === 0) return; // hide late if none
-      html += '<button class="btn ' + (self._filter === f[0] ? 'btn-primary' : 'btn-outline') + '" onclick="JobsPage._setFilter(\'' + f[0] + '\')" style="font-size:12px;padding:6px 10px;">' + f[0].replace(/_/g,' ').replace(/\b\w/g,function(l){return l.toUpperCase();}) + ' (' + f[1] + ')</button>';
-    });
-    html += '</div></div>';
+    // Batch invoice banner — recent jobs only (actionable)
+    if (recentNeedsInvoicing.length > 0) {
+      var needsTotal = recentNeedsInvoicing.reduce(function(s, j) { return s + (j.total || 0); }, 0);
+      html += '<div id="batch-invoice-banner" style="background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;padding:14px 20px;border-radius:10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;box-shadow:0 2px 8px rgba(46,125,50,.3);">'
+        + '<div style="display:flex;align-items:center;gap:10px;">'
+        + '<span style="font-size:22px;">💰</span>'
+        + '<div><div style="font-size:14px;font-weight:600;">' + recentNeedsInvoicing.length + ' recent completed job' + (recentNeedsInvoicing.length !== 1 ? 's' : '') + ' need invoicing &mdash; ' + UI.money(needsTotal) + '</div>'
+        + '<div style="font-size:12px;opacity:.85;margin-top:2px;">Jobs completed in the last 60 days without an invoice.</div></div>'
+        + '</div>'
+        + '<button onclick="JobsPage._batchInvoiceAll()" style="background:#fff;color:#2e7d32;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.15);">Create Invoices</button>'
+        + '</div>';
+    }
+    // Legacy Jobber jobs banner (dismissible)
+    if (legacyNeedsInvoicing.length > 0) {
+      html += '<div style="background:#f5f5f5;border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+        + '<div style="font-size:13px;color:var(--text-light);">📦 <strong>' + legacyNeedsInvoicing.length + ' older Jobber jobs</strong> were already invoiced before migration — click to dismiss.</div>'
+        + '<button onclick="JobsPage._markAllLegacyInvoiced()" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Mark as Invoiced (Jobber)</button>'
+        + '</div>';
+    }
 
     var filtered = self._getFiltered();
     var page = filtered.slice(self._page * self._perPage, (self._page + 1) * self._perPage);
 
-    html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;">Showing ' + Math.min(self._page * self._perPage + 1, filtered.length) + '–' + Math.min((self._page + 1) * self._perPage, filtered.length) + ' of ' + filtered.length + '</div>';
-
-    // Bulk action bar
-    html += '<div id="job-bulk-bar" style="display:none;position:sticky;top:60px;z-index:50;background:var(--accent);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:8px;justify-content:space-between;align-items:center;">'
-      + '<span id="job-bulk-count" style="font-weight:700;">0 selected</span>'
-      + '<div style="display:flex;gap:6px;">'
-      + '<button onclick="JobsPage._batchInvoice()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Create Invoices</button>'
-      + '<button onclick="JobsPage._selectAll(false)" style="background:none;color:rgba(255,255,255,.7);border:none;padding:6px 8px;font-size:12px;cursor:pointer;">Clear</button>'
+    // Jobber-style header + filter chips + search
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+      + '<h3 style="font-size:16px;font-weight:700;margin:0;">All jobs</h3>'
+      + '<span style="font-size:13px;color:var(--text-light);">(' + filtered.length + ' results)</span>'
+      + (function() {
+        var chips = [['all','All'],['scheduled','Scheduled'],['in_progress','In Progress'],['completed','Completed'],['late','Late'],['action_required','Action Required']];
+        var out = '';
+        for (var ci = 0; ci < chips.length; ci++) {
+          var val = chips[ci][0], label = chips[ci][1];
+          var isActive = self._filter === val;
+          out += '<button onclick="JobsPage._setFilter(\'' + val + '\')" style="font-size:12px;padding:5px 14px;border-radius:20px;border:1px solid ' + (isActive ? '#2e7d32' : 'var(--border)') + ';background:' + (isActive ? '#2e7d32' : 'var(--white)') + ';color:' + (isActive ? '#fff' : 'var(--text)') + ';cursor:pointer;font-weight:' + (isActive ? '600' : '500') + ';">' + label + '</button>';
+        }
+        return out;
+      })()
+      + '</div>'
+      + '<div class="search-box" style="min-width:200px;max-width:280px;">'
+      + '<span style="color:var(--text-light);">🔍</span>'
+      + '<input type="text" placeholder="Search jobs..." value="' + UI.esc(self._search) + '" oninput="JobsPage._search=this.value;JobsPage._page=0;loadPage(\'jobs\')">'
       + '</div></div>';
+
+    // Floating batch action bar (fixed to bottom)
+    html += '<div id="job-bulk-bar" style="display:none;position:fixed;bottom:0;left:var(--sidebar-w,240px);right:0;z-index:500;background:#1a1a2e;color:#fff;padding:12px 24px;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:batchSlideUp .25s ease-out;">'
+      + '<span id="job-bulk-count" style="font-weight:700;font-size:14px;">0 selected</span>'
+      + '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<button onclick="JobsPage._batchComplete()" style="background:#2e7d32;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Mark Complete</button>'
+      + '<button onclick="JobsPage._batchAssignCrew()" style="background:#2e7d32;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Assign Crew</button>'
+      + '<button onclick="JobsPage._batchExport()" style="background:#2e7d32;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Export</button>'
+      + '<button onclick="JobsPage._selectAll(false)" style="background:none;color:rgba(255,255,255,.7);border:none;padding:8px 12px;font-size:16px;cursor:pointer;">&#10005;</button>'
+      + '</div></div>'
+      + '<style>@keyframes batchSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>';
 
     html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'
       + '<table class="data-table"><thead><tr>'
       + '<th style="width:32px;"><input type="checkbox" onchange="JobsPage._selectAll(this.checked)" style="width:16px;height:16px;"></th>'
-      + '<th>Client</th><th>#</th><th>Description</th><th>Scheduled</th><th>Status</th><th>Crew</th><th style="text-align:right;">Total</th>'
+      + self._sortTh('Client', 'clientName') + self._sortTh('Job #', 'jobNumber') + '<th>Property</th>' + self._sortTh('Schedule', 'scheduledDate') + self._sortTh('Status', 'status') + '<th>Crew</th>' + self._sortTh('Total', 'total', 'text-align:right;') + '<th></th>'
       + '</tr></thead><tbody>';
 
     if (page.length === 0) {
-      html += '<tr><td colspan="8">' + (self._search ? '<div style="text-align:center;padding:24px;color:var(--text-light);">No jobs match "' + self._search + '"</div>' : UI.emptyState('🔧', 'No jobs yet', 'Create a job from an approved quote.', '+ New Job', 'JobsPage.showForm()')) + '</td></tr>';
+      html += '<tr><td colspan="9">' + (self._search ? '<div style="text-align:center;padding:24px;color:var(--text-light);">No jobs match "' + self._search + '"</div>' : UI.emptyState('🔧', 'No jobs yet', 'Create a job from an approved quote.', '+ New Job', 'JobsPage.showForm()')) + '</td></tr>';
     } else {
       page.forEach(function(j) {
-        html += '<tr style="cursor:pointer;">'
+        html += '<tr style="cursor:pointer;" onclick="JobsPage.showDetail(\'' + j.id + '\')">'
           + '<td onclick="event.stopPropagation()"><input type="checkbox" class="job-check" value="' + j.id + '" onchange="JobsPage._updateBulk()" style="width:16px;height:16px;"></td>'
-          + '<td onclick="JobsPage.showDetail(\'' + j.id + '\')"><strong>' + (j.clientName || '—') + '</strong></td>'
+          + '<td><strong>' + UI.esc(j.clientName || '—') + '</strong></td>'
           + '<td>#' + (j.jobNumber || '') + '</td>'
-          + '<td style="font-size:13px;color:var(--text-light);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (j.description || '—') + '</td>'
+          + '<td style="font-size:13px;color:var(--text-light);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.esc(j.description || '—') + '</td>'
           + '<td style="white-space:nowrap;">' + UI.dateShort(j.scheduledDate) + '</td>'
           + '<td>' + UI.statusBadge(j.status) + '</td>'
           + '<td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (j.crew ? j.crew.join(', ') : '—') + '</td>'
-          + '<td style="text-align:right;font-weight:600;">' + UI.money(j.total) + '</td>'
+          + '<td style="text-align:right;font-weight:600;">' + UI.money(j.total)
+          + (j.satisfaction && j.satisfaction.rating ? '<div style="font-size:10px;color:#ffc107;margin-top:2px;">' + Array(j.satisfaction.rating + 1).join('⭐') + '</div>' : '')
+          + '</td>'
+          + '<td onclick="event.stopPropagation()" style="text-align:right;padding-right:12px;white-space:nowrap;">'
+          + (j.status === 'scheduled' || j.status === 'in_progress'
+            ? '<button onclick="event.stopPropagation();JobsPage._quickComplete(\'' + j.id + '\')" style="font-size:11px;padding:3px 8px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;">✓ Done</button>'
+            : (j.status === 'completed' && !j.invoiceId
+              ? '<button onclick="event.stopPropagation();(function(){var inv=Workflow.jobToInvoice(\'' + j.id + '\');loadPage(\'invoices\');if(inv)setTimeout(function(){InvoicesPage.showDetail(inv.id);},100);})()" style="font-size:11px;padding:3px 8px;background:#1565c0;color:#fff;border:none;border-radius:4px;cursor:pointer;">💰 Invoice</button>'
+              : ''))
+          + '</td>'
           + '</tr>';
       });
     }
@@ -90,15 +176,35 @@ var JobsPage = {
       var s = self._search.toLowerCase();
       all = all.filter(function(j) { return (j.clientName||'').toLowerCase().indexOf(s) >= 0 || (j.description||'').toLowerCase().indexOf(s) >= 0 || (j.property||'').toLowerCase().indexOf(s) >= 0 || String(j.jobNumber).indexOf(s) >= 0; });
     }
-    all.sort(function(a, b) { return (b.jobNumber || 0) - (a.jobNumber || 0); });
+    var col = self._sortCol;
+    var dir = self._sortDir === 'asc' ? 1 : -1;
+    all.sort(function(a, b) {
+      var va = a[col], vb = b[col];
+      if (col === 'jobNumber' || col === 'total') return ((va || 0) - (vb || 0)) * dir;
+      if (col === 'scheduledDate') return ((new Date(va || 0)).getTime() - (new Date(vb || 0)).getTime()) * dir;
+      va = (va || '').toString().toLowerCase(); vb = (vb || '').toString().toLowerCase();
+      return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+    });
     return all;
+  },
+  _sortTh: function(label, col, extraStyle) {
+    var self = JobsPage;
+    var arrow = self._sortCol === col ? (self._sortDir === 'asc' ? ' &#9650;' : ' &#9660;') : '';
+    return '<th onclick="JobsPage._setSort(\'' + col + '\')" style="cursor:pointer;user-select:none;' + (extraStyle || '') + '"' + (self._sortCol === col ? ' class="sort-active"' : '') + '>' + label + arrow + '</th>';
+  },
+  _setSort: function(col) {
+    if (JobsPage._sortCol === col) { JobsPage._sortDir = JobsPage._sortDir === 'asc' ? 'desc' : 'asc'; }
+    else { JobsPage._sortCol = col; JobsPage._sortDir = 'asc'; }
+    JobsPage._page = 0; loadPage('jobs');
   },
   _setFilter: function(f) { JobsPage._filter = f; JobsPage._page = 0; loadPage('jobs'); },
   _goPage: function(p) { var t = Math.ceil(JobsPage._getFiltered().length / JobsPage._perPage); JobsPage._page = Math.max(0, Math.min(p, t - 1)); loadPage('jobs'); },
 
-  // Batch invoicing
+  // Batch actions
   _selectAll: function(checked) {
     document.querySelectorAll('.job-check').forEach(function(cb) { cb.checked = checked; });
+    var headerCheck = document.querySelector('th input[type="checkbox"]');
+    if (headerCheck) headerCheck.checked = checked;
     JobsPage._updateBulk();
   },
   _updateBulk: function() {
@@ -107,6 +213,22 @@ var JobsPage = {
     var count = document.getElementById('job-bulk-count');
     if (bar) bar.style.display = selected.length > 0 ? 'flex' : 'none';
     if (count) count.textContent = selected.length + ' selected';
+  },
+  _quickComplete: function(id) {
+    var j = DB.jobs.getById(id);
+    if (!j) return;
+    DB.jobs.update(id, { status: 'completed', completedAt: new Date().toISOString() });
+    UI.toast('Job #' + j.jobNumber + ' marked complete');
+    loadPage('jobs');
+  },
+  _batchComplete: function() {
+    var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
+    if (ids.length === 0) return;
+    UI.confirm('Mark ' + ids.length + ' job' + (ids.length > 1 ? 's' : '') + ' as completed?', function() {
+      ids.forEach(function(id) { DB.jobs.update(id, { status: 'completed' }); });
+      UI.toast(ids.length + ' job' + (ids.length > 1 ? 's' : '') + ' marked complete');
+      loadPage('jobs');
+    });
   },
   _batchInvoice: function() {
     var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
@@ -122,9 +244,155 @@ var JobsPage = {
     UI.toast(created + ' invoice' + (created !== 1 ? 's' : '') + ' created!');
     loadPage('invoices');
   },
+  _markAllLegacyInvoiced: function() {
+    var needsInvoicing = DB.jobs.getAll().filter(function(j) { return j.status === 'completed' && !j.invoiceId; });
+    UI.confirm('Mark all ' + needsInvoicing.length + ' completed jobs as already invoiced in Jobber? This clears the banner — no new invoices will be created.', function() {
+      needsInvoicing.forEach(function(j) { DB.jobs.update(j.id, { invoiceId: 'legacy' }); });
+      UI.toast(needsInvoicing.length + ' jobs marked as legacy-invoiced');
+      loadPage('jobs');
+    });
+  },
 
-  showForm: function(jobId) {
+  _batchInvoiceAll: function() {
+    var all = DB.jobs.getAll();
+    var needsInvoicing = all.filter(function(j) { return j.status === 'completed' && !j.invoiceId; });
+    if (needsInvoicing.length === 0) { UI.toast('No jobs need invoicing'); return; }
+
+    var totalAmount = needsInvoicing.reduce(function(s, j) { return s + (j.total || 0); }, 0);
+
+    // Build confirmation modal listing all jobs
+    var listHtml = '<div style="margin-bottom:12px;font-size:14px;">The following <strong>' + needsInvoicing.length + '</strong> job' + (needsInvoicing.length !== 1 ? 's' : '') + ' will be invoiced:</div>'
+      + '<div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;">'
+      + '<table style="width:100%;font-size:13px;border-collapse:collapse;">'
+      + '<thead><tr style="background:var(--bg);position:sticky;top:0;">'
+      + '<th style="text-align:left;padding:8px 12px;font-weight:600;">Client</th>'
+      + '<th style="text-align:left;padding:8px 12px;font-weight:600;">Job #</th>'
+      + '<th style="text-align:right;padding:8px 12px;font-weight:600;">Total</th>'
+      + '</tr></thead><tbody>';
+    for (var i = 0; i < needsInvoicing.length; i++) {
+      var nj = needsInvoicing[i];
+      listHtml += '<tr style="border-top:1px solid var(--border);">'
+        + '<td style="padding:8px 12px;">' + UI.esc(nj.clientName || '—') + '</td>'
+        + '<td style="padding:8px 12px;">#' + (nj.jobNumber || '') + '</td>'
+        + '<td style="padding:8px 12px;text-align:right;font-weight:600;">' + UI.money(nj.total) + '</td>'
+        + '</tr>';
+    }
+    listHtml += '</tbody></table></div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:2px solid var(--border);">'
+      + '<span style="font-size:15px;font-weight:700;">Total</span>'
+      + '<span style="font-size:18px;font-weight:800;color:#2e7d32;">' + UI.money(totalAmount) + '</span>'
+      + '</div>';
+
+    UI.showModal('Batch Create Invoices', listHtml, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
+        + ' <button class="btn btn-primary" onclick="JobsPage._batchInvoiceConfirm()" style="background:#2e7d32;">Create ' + needsInvoicing.length + ' Invoice' + (needsInvoicing.length !== 1 ? 's' : '') + '</button>'
+    });
+  },
+  _batchInvoiceConfirm: function() {
+    var all = DB.jobs.getAll();
+    var needsInvoicing = all.filter(function(j) { return j.status === 'completed' && !j.invoiceId; });
+    var today = new Date().toISOString().split('T')[0];
+    var dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+    var created = 0;
+    var totalAmount = 0;
+
+    for (var i = 0; i < needsInvoicing.length; i++) {
+      var job = needsInvoicing[i];
+      var inv = DB.invoices.create({
+        clientId: job.clientId,
+        clientName: job.clientName,
+        jobId: job.id,
+        subject: 'For Services Rendered',
+        lineItems: job.lineItems,
+        total: job.total || 0,
+        balance: job.total || 0,
+        status: 'draft',
+        issuedDate: today,
+        dueDate: dueDate
+      });
+      DB.jobs.update(job.id, { invoiceId: inv.id });
+      totalAmount += (job.total || 0);
+      created++;
+    }
+
+    UI.closeModal();
+    UI.toast('Created ' + created + ' invoice' + (created !== 1 ? 's' : '') + ' totaling ' + UI.money(totalAmount));
+    loadPage('jobs');
+  },
+  _batchAssignCrew: function() {
+    var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
+    if (ids.length === 0) return;
+    var team = [];
+    try { team = JSON.parse(localStorage.getItem('bm-team') || '[]'); } catch(e) {}
+    var options = '';
+    team.forEach(function(t) {
+      options += '<option value="' + UI.esc(t.name) + '">' + UI.esc(t.name) + '</option>';
+    });
+    var html = '<div style="padding:8px 0;">'
+      + '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Select crew member to assign to ' + ids.length + ' job' + (ids.length > 1 ? 's' : '') + ':</label>'
+      + '<select id="batch-crew-select" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">'
+      + '<option value="">-- Select --</option>'
+      + options
+      + '</select>'
+      + '<div style="margin-top:8px;"><input type="text" id="batch-crew-other" placeholder="Or type a name..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;box-sizing:border-box;"></div>'
+      + '</div>';
+    UI.showModal('Assign Crew', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
+        + ' <button class="btn btn-primary" onclick="JobsPage._batchAssignCrewConfirm()">Assign</button>'
+    });
+  },
+  _batchAssignCrewConfirm: function() {
+    var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
+    var sel = document.getElementById('batch-crew-select');
+    var other = document.getElementById('batch-crew-other');
+    var name = (sel && sel.value) ? sel.value : (other ? other.value.trim() : '');
+    if (!name) { UI.toast('Please select or enter a crew member'); return; }
+    ids.forEach(function(id) {
+      var job = DB.jobs.getById(id);
+      var crew = (job && job.crew) ? job.crew.slice() : [];
+      if (crew.indexOf(name) < 0) { crew.push(name); }
+      DB.jobs.update(id, { crew: crew });
+    });
+    UI.toast(ids.length + ' job' + (ids.length > 1 ? 's' : '') + ' assigned to ' + name);
+    UI.closeModal();
+    loadPage('jobs');
+  },
+  _batchExport: function() {
+    var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
+    if (ids.length === 0) return;
+    var rows = ['Job #,Client,Property,Scheduled,Status,Crew,Total'];
+    ids.forEach(function(id) {
+      var j = DB.jobs.getById(id);
+      if (!j) return;
+      var crew = (j.crew && j.crew.length) ? j.crew.join('; ') : '';
+      rows.push(
+        '"' + (j.jobNumber || '') + '",'
+        + '"' + (j.clientName || '').replace(/"/g, '""') + '",'
+        + '"' + (j.property || '').replace(/"/g, '""') + '",'
+        + '"' + (j.scheduledDate || '') + '",'
+        + '"' + (j.status || '') + '",'
+        + '"' + crew.replace(/"/g, '""') + '",'
+        + '"' + (j.total || 0) + '"'
+      );
+    });
+    var csv = rows.join('\n');
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'jobs-export-' + new Date().toISOString().split('T')[0] + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    UI.toast(ids.length + ' job' + (ids.length > 1 ? 's' : '') + ' exported');
+  },
+
+  showForm: function(jobId, opts) {
     var j = jobId ? DB.jobs.getById(jobId) : {};
+    // Backwards-compat: opts used to be passed as a clientId string
+    if (typeof opts === 'string') opts = { clientId: opts };
+    opts = opts || {};
     // Get clients synchronously from localStorage
     var allClients = [];
     try { allClients = JSON.parse(localStorage.getItem('bm-clients') || '[]'); } catch(e) {}
@@ -147,13 +415,13 @@ var JobsPage = {
     }
 
     var html = '<form id="job-form" onsubmit="JobsPage.save(event, \'' + (jobId || '') + '\')">'
-      + UI.formField('Client *', 'select', 'j-clientId', j.clientId, { options: [{ value: '', label: 'Select a client...' }].concat(clientOptions) })
+      + UI.formField('Client *', 'select', 'j-clientId', j.clientId || opts.clientId || '', { options: [{ value: '', label: 'Select a client...' }].concat(clientOptions) })
       + UI.formField('Property Address', 'text', 'j-property', j.property, { placeholder: 'Job site address' })
       + UI.formField('Description', 'text', 'j-description', j.description, { placeholder: 'e.g., Remove 2 dead oaks' })
 
       // Date + Time (Jobber style)
       + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'
-      + UI.formField('Date *', 'date', 'j-date', j.scheduledDate ? j.scheduledDate.split('T')[0] : '')
+      + UI.formField('Date *', 'date', 'j-date', (j.scheduledDate ? j.scheduledDate.split('T')[0] : '') || opts.date || '')
       + UI.formField('Start Time', 'select', 'j-starttime', j.startTime || '08:00', { options: [{ value: '', label: 'Anytime' }].concat(timeSlots) })
       + UI.formField('End Time', 'select', 'j-endtime', j.endTime || '', { options: [{ value: '', label: 'Open' }].concat(timeSlots) })
       + '</div>'
@@ -256,50 +524,91 @@ var JobsPage = {
     var timeEntries = DB.timeEntries ? DB.timeEntries.getAll().filter(function(te) { return te.jobId === id; }) : [];
     var totalHours = timeEntries.reduce(function(s, te) { return s + (te.hours || 0); }, 0);
 
-    // Full-page job detail (Jobber style)
+    // Jobber-style job detail
+    var statusColors = {scheduled:'#1565c0',in_progress:'#e07c24',completed:'#2e7d32',invoiced:'#2e7d32',late:'#dc3545',cancelled:'#6c757d'};
+    var statusColor = statusColors[j.status] || '#2e7d32';
+    var client = j.clientId ? DB.clients.getById(j.clientId) : null;
+
     var html = ''
-      // Back + header
-      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">'
-      + '<button class="btn btn-outline" onclick="loadPage(\'jobs\')" style="padding:6px 12px;">← Back</button>'
-      + '<div style="flex:1;">'
-      + '<h2 style="font-size:22px;margin-bottom:2px;">Job #' + j.jobNumber + '</h2>'
-      + '<span style="font-size:14px;color:var(--text-light);">' + (j.clientName || '') + (j.property ? ' — ' + j.property : '') + '</span>'
+      // Colored status bar
+      + '<div style="height:4px;background:' + statusColor + ';margin:-24px -24px 16px -24px;"></div>'
+
+      // Status + action buttons
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      + '<div style="display:flex;align-items:center;gap:8px;">'
+      + '<span style="font-size:20px;">🔧</span>'
+      + '<span>' + UI.statusBadge(j.status) + '</span>'
       + '</div>'
       + '<div style="display:flex;gap:6px;">'
-      + '<button class="btn btn-outline" onclick="JobsPage.showForm(\'' + id + '\')">Edit</button>'
-      + '<button class="btn btn-outline" onclick="PDF.generateJobSheet(\'' + id + '\')">📄 Job Sheet</button>'
-      + '<button class="btn btn-outline" onclick="PropertyMap.show(\'' + (j.property || '').replace(/'/g, "\\'") + '\')">🗺 Map</button>'
-      + (j.status === 'completed' && !j.invoiceId ? '<button class="btn btn-primary" onclick="if(typeof Workflow!==\'undefined\')Workflow.jobToInvoice(\'' + id + '\');loadPage(\'invoices\');">Create Invoice</button>' : '')
+      + '<button class="btn btn-outline" onclick="JobsPage.showForm(\'' + id + '\')">··· More</button>'
+      + (j.status === 'completed' && !j.invoiceId ? '<button class="btn btn-primary" onclick="(function(){var inv=Workflow.jobToInvoice(\'' + id + '\');UI.closeModal();loadPage(\'invoices\');if(inv)setTimeout(function(){InvoicesPage.showDetail(inv.id);},100);})()">💰 Create Invoice</button>' : '<button class="btn btn-primary" onclick="PDF.generateJobSheet(\'' + id + '\')">📄 Job Sheet</button>')
       + '</div></div>'
 
-      // Status + total bar
-      + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;">'
-      + UI.statCard('Status', '<span style="font-size:14px;">' + UI.statusBadge(j.status) + '</span>', '', '', '')
-      + UI.statCard('Total', UI.money(j.total), '', '', '')
-      + UI.statCard('Scheduled', UI.dateShort(j.scheduledDate), (j.startTime || 'Anytime'), '', '')
-      + UI.statCard('Time Tracked', totalHours.toFixed(1) + ' hrs', timeEntries.length + ' entries', '', '')
-      + UI.statCard('Crew', (j.crew ? j.crew.length : 0) + ' assigned', '', '', '')
+      // Title
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">'
+      + '<h2 style="font-size:24px;font-weight:700;">Job for ' + UI.esc(j.clientName || '—') + '</h2>'
+      + '<button onclick="JobsPage.showForm(\'' + id + '\')" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-light);">✏️</button>'
       + '</div>'
 
-      // Two column layout
-      + '<div style="display:grid;grid-template-columns:1fr 340px;gap:20px;">'
+      // Two-column: Client card (left) + metadata (right)
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" class="detail-grid">'
 
-      // Left — main content
+      // Client contact card
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:start;">'
       + '<div>'
+      + '<div style="font-size:16px;font-weight:700;">' + UI.esc(j.clientName || '—') + ' <span style="color:#2e7d32;font-size:10px;">●</span></div>'
+      + '<div style="font-size:12px;color:var(--text-light);margin-top:4px;">Property Address</div>'
+      + '<div style="font-size:14px;margin-top:2px;">' + UI.esc(j.property || '—') + '</div>'
+      + (j.clientPhone || (client && client.phone) ? '<div style="font-size:14px;margin-top:8px;">' + (j.clientPhone || client.phone) + '</div>' : '')
+      + (j.clientEmail || (client && client.email) ? '<div style="margin-top:2px;"><a href="mailto:' + (j.clientEmail || (client && client.email) || '') + '" style="font-size:14px;color:#1565c0;">' + (j.clientEmail || (client && client.email) || '') + '</a></div>' : '')
+      + '</div>'
+      + '<button style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text-light);">···</button>'
+      + '</div></div>'
 
-      // Status workflow buttons
-      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">'
-      + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Status</h4>'
+      // Job metadata table
+      + '<div>'
+      + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
+      + '<tr><td style="padding:8px 0;color:var(--text-light);width:130px;">Job #</td><td style="padding:8px 0;font-weight:500;">' + (j.jobNumber || '') + '</td></tr>'
+      + '<tr><td style="padding:8px 0;color:var(--text-light);">Scheduled</td><td style="padding:8px 0;">' + UI.dateShort(j.scheduledDate) + (j.startTime ? ' at ' + j.startTime : '') + '</td></tr>'
+      + '<tr><td style="padding:8px 0;color:var(--text-light);">Total</td><td style="padding:8px 0;font-weight:700;font-size:16px;">' + UI.money(j.total) + '</td></tr>'
+      + '<tr><td style="padding:8px 0;color:var(--text-light);">Time Tracked</td><td style="padding:8px 0;">' + totalHours.toFixed(1) + ' hrs (' + timeEntries.length + ' entries)</td></tr>'
+      + '<tr><td style="padding:8px 0;color:var(--text-light);">Crew</td><td style="padding:8px 0;">' + (j.crew && j.crew.length ? j.crew.join(', ') : 'Unassigned') + '</td></tr>'
+      + '</table></div>'
+      + '</div>'
+
+      // Workflow progress bar
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    var jStages = ['scheduled','in_progress','completed','invoiced'];
+    var jLabels = {scheduled:'Scheduled',in_progress:'In Progress',completed:'Completed',invoiced:'Invoiced'};
+    var jIdx = jStages.indexOf(j.status);
+    if (jIdx < 0) jIdx = 0;
+    if (j.invoiceId) jIdx = 3;
+    html += '<div style="display:flex;align-items:center;margin-bottom:14px;">';
+    jStages.forEach(function(s, i) {
+      var done = i <= jIdx;
+      var active = i === jIdx;
+      html += '<div style="flex:1;text-align:center;position:relative;">'
+        + '<div style="width:28px;height:28px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;'
+        + (done ? 'background:var(--accent);color:#fff;' : 'background:var(--bg);color:var(--text-light);border:2px solid var(--border);') + '">'
+        + (done && !active ? '✓' : (i + 1)) + '</div>'
+        + '<div style="font-size:11px;font-weight:' + (active ? '700' : '500') + ';color:' + (done ? 'var(--accent)' : 'var(--text-light)') + ';margin-top:4px;">' + jLabels[s] + '</div>'
+        + '</div>';
+      if (i < jStages.length - 1) {
+        html += '<div style="flex:0 0 40px;height:2px;background:' + (i < jIdx ? 'var(--accent)' : 'var(--border)') + ';margin-top:-16px;"></div>';
+      }
+    });
+    html += '</div>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
     ['scheduled', 'in_progress', 'completed', 'cancelled'].forEach(function(s) {
-      html += '<button class="btn ' + (j.status === s ? 'btn-primary' : 'btn-outline') + '" onclick="JobsPage.setStatus(\'' + id + '\',\'' + s + '\');JobsPage.showDetail(\'' + id + '\');" style="font-size:12px;padding:6px 14px;">' + s.replace(/_/g, ' ') + '</button>';
+      html += '<button class="btn ' + (j.status === s ? 'btn-primary' : 'btn-outline') + '" onclick="JobsPage.' + (s === 'completed' ? '_markComplete' : 'setStatus') + '(\'' + id + '\'' + (s !== 'completed' ? ',\'' + s + '\'' : '') + ');" style="font-size:11px;padding:5px 12px;">' + s.replace(/_/g, ' ') + '</button>';
     });
     html += '</div></div>'
 
       // Description
       + (j.description ? '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">'
         + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Description</h4>'
-        + '<p style="font-size:14px;line-height:1.6;margin:0;">' + j.description + '</p></div>' : '')
+        + '<p style="font-size:14px;line-height:1.6;margin:0;">' + UI.esc(j.description) + '</p></div>' : '')
 
       // Line items
       + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;">'
@@ -316,8 +625,38 @@ var JobsPage = {
     }
     html += '</div>'
 
+    // Client satisfaction
+    if (typeof Satisfaction !== 'undefined') {
+      html += Satisfaction.renderForJob(id);
+    }
+
+    // Custom fields
+    if (typeof CustomFields !== 'undefined') {
+      html += CustomFields.renderDisplay('job', id);
+    }
+
+    // Job Checklist
+    if (typeof Checklists !== 'undefined') {
+      html += Checklists.renderForJob(id);
+    }
+
+    // Visits (multi-visit)
+    if (typeof Visits !== 'undefined') {
+      html += Visits.renderForJob(id);
+    }
+
+    // Materials used
+    if (typeof Materials !== 'undefined') {
+      html += Materials.renderForJob(id);
+    }
+
+    // Before/After photos
+    if (typeof BeforeAfter !== 'undefined') {
+      html += BeforeAfter.renderForJob(id);
+    }
+
       // Photos
-      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">'
+    html += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">'
       + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Photos</h4>';
     if (typeof Photos !== 'undefined') {
       html += Photos.renderGallery('job', id);
@@ -357,6 +696,21 @@ var JobsPage = {
       html += '<div style="color:var(--text-light);font-size:13px;">No time logged</div>';
     }
     html += '</div>'
+
+      // Notes — inline editable
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+      + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin:0;">Notes</h4>'
+      + '<button onclick="JobsPage._editNote(\'' + id + '\')" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--accent);font-weight:600;">✏️ Edit</button>'
+      + '</div>'
+      + '<div id="job-note-view-' + id + '" style="font-size:13px;color:' + (j.notes ? 'var(--text)' : 'var(--text-light)') + ';line-height:1.6;min-height:32px;">' + (j.notes ? UI.esc(j.notes) : 'No notes. Tap Edit to add.') + '</div>'
+      + '<div id="job-note-edit-' + id + '" style="display:none;">'
+      + '<textarea id="job-note-ta-' + id + '" style="width:100%;height:80px;border:2px solid var(--accent);border-radius:6px;padding:8px;font-size:13px;resize:vertical;">' + UI.esc(j.notes || '') + '</textarea>'
+      + '<div style="display:flex;gap:6px;margin-top:6px;">'
+      + '<button onclick="JobsPage._saveNote(\'' + id + '\')" style="background:var(--green-dark);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Save</button>'
+      + '<button onclick="JobsPage._cancelNote(\'' + id + '\')" style="background:none;border:1px solid var(--border);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;">Cancel</button>'
+      + '</div></div>'
+      + '</div>'
 
       // Quick actions
       + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">'
@@ -398,11 +752,86 @@ var JobsPage = {
     return;
   },
 
+  // Inline note editing
+  _editNote: function(jobId) {
+    var v = document.getElementById('job-note-view-' + jobId);
+    var e = document.getElementById('job-note-edit-' + jobId);
+    if (v) v.style.display = 'none';
+    if (e) e.style.display = 'block';
+    var ta = document.getElementById('job-note-ta-' + jobId);
+    if (ta) ta.focus();
+  },
+  _cancelNote: function(jobId) {
+    var v = document.getElementById('job-note-view-' + jobId);
+    var e = document.getElementById('job-note-edit-' + jobId);
+    if (v) v.style.display = 'block';
+    if (e) e.style.display = 'none';
+  },
+  _saveNote: function(jobId) {
+    var ta = document.getElementById('job-note-ta-' + jobId);
+    if (!ta) return;
+    var notes = ta.value.trim();
+    DB.jobs.update(jobId, { notes: notes });
+    var v = document.getElementById('job-note-view-' + jobId);
+    if (v) {
+      v.textContent = notes || 'No notes. Tap Edit to add.';
+      v.style.color = notes ? 'var(--text)' : 'var(--text-light)';
+      v.style.display = 'block';
+    }
+    var e = document.getElementById('job-note-edit-' + jobId);
+    if (e) e.style.display = 'none';
+    UI.toast('Notes saved');
+  },
+
   // Legacy modal (not used)
   _showDetailModal: function(id) {
     UI.showModal('Job', '<p>Use full-page view.</p>', {
       footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Close</button>'
     });
+  },
+
+  _markComplete: function(id) {
+    var j = DB.jobs.getById(id);
+    if (!j) return;
+    DB.jobs.update(id, { status: 'completed', completedAt: new Date().toISOString() });
+    UI.closeModal();
+
+    // Silently trigger review request email in background (2s delay so modal renders first)
+    setTimeout(function() {
+      if (typeof AutomationsPage !== 'undefined') {
+        var config = AutomationsPage.getConfig();
+        if (config.reviewRequest && config.reviewRequest.enabled) {
+          var origToast = UI.toast;
+          UI.toast = function(){};
+          try { AutomationsPage.runReviewRequests(); } finally {
+            setTimeout(function() { UI.toast = origToast; }, 100);
+          }
+        }
+      }
+    }, 2000);
+
+    // Build modal footer — include review request button if email is configured
+    var reviewBtn = (typeof Email !== 'undefined' && Email.isConfigured())
+      ? ' <button class="btn btn-outline" onclick="UI.closeModal();AutomationsPage.runReviewRequests();">📧 Send Review Request</button>'
+      : '';
+
+    // Prompt to create invoice
+    if (!j.invoiceId) {
+      var modal = '<div style="text-align:center;padding:8px 0;">'
+        + '<div style="font-size:48px;margin-bottom:12px;">💰</div>'
+        + '<h3 style="font-size:18px;margin-bottom:8px;">Job Complete!</h3>'
+        + '<p style="color:var(--text-light);font-size:14px;margin-bottom:20px;">Ready to invoice ' + UI.esc(j.clientName || 'the client') + ' for ' + UI.money(j.total) + '?</p>'
+        + '<div style="display:flex;gap:8px;justify-content:center;">'
+        + '<button class="btn btn-outline" onclick="UI.closeModal();loadPage(\'jobs\');">Not Yet</button>'
+        + '<button class="btn btn-primary" onclick="UI.closeModal();JobsPage.createInvoice(\'' + id + '\');loadPage(\'invoices\');">Create Invoice Now</button>'
+        + '</div></div>';
+      UI.showModal('Job Completed', modal, {
+        footer: '<button class="btn btn-outline" onclick="UI.closeModal();loadPage(\'jobs\');">Close</button>' + reviewBtn
+      });
+    } else {
+      UI.toast('Job marked complete');
+      loadPage('jobs');
+    }
   },
 
   setStatus: function(id, status) {
@@ -418,14 +847,19 @@ var JobsPage = {
     var inv = DB.invoices.create({
       clientId: j.clientId,
       clientName: j.clientName,
+      clientEmail: j.clientEmail || '',
+      clientPhone: j.clientPhone || '',
       jobId: jobId,
       subject: j.description || 'For Services Rendered',
       lineItems: j.lineItems,
       total: j.total,
       balance: j.total,
+      amountPaid: 0,
       status: 'draft',
       dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
     });
+    // Link invoice back to job so dashboard "needs invoicing" alert clears
+    DB.jobs.update(jobId, { invoiceId: inv.id, status: 'completed' });
     UI.toast('Invoice #' + inv.invoiceNumber + ' created');
     UI.closeModal();
     loadPage('invoices');

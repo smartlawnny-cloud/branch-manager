@@ -7,7 +7,7 @@
  * Reads come from cache (fast, synchronous). Writes go to both cache + cloud.
  */
 var CloudSync = {
-  tables: ['clients', 'requests', 'quotes', 'jobs', 'invoices', 'services'],
+  tables: ['clients', 'requests', 'quotes', 'jobs', 'invoices', 'services', 'expenses', 'time_entries'],
   syncing: false,
   lastSync: 0,
 
@@ -26,7 +26,12 @@ var CloudSync = {
         // Pull all rows from Supabase
         var { data, error } = await sb.from(table).select('*').order('created_at', { ascending: false }).limit(1000);
         if (error) {
-          console.warn('CloudSync: error fetching ' + table + ':', error.message);
+          // Table doesn't exist in Supabase yet — remove from sync list silently
+          if (error.message && error.message.includes('schema cache')) {
+            CloudSync.tables = CloudSync.tables.filter(function(t) { return t !== table; });
+          } else {
+            console.warn('CloudSync: error fetching ' + table + ':', error.message);
+          }
           continue;
         }
 
@@ -74,25 +79,27 @@ var CloudSync = {
       var origUpdate = dbSection.update;
       var origRemove = dbSection.remove;
 
-      // Wrap create — write local + cloud
+      // Wrap create — pre-assign UUID so local + cloud IDs always match
       dbSection.create = function(record) {
+        // Inject UUID before local create so both sides use the same ID
+        if (!record.id || record.id.indexOf('-') === -1) {
+          record.id = CloudSync._uuid();
+        }
         var result = origCreate.call(dbSection, record);
-        // Async push to cloud
         var cloudRecord = CloudSync._toSnake(result);
-        cloudRecord.id = CloudSync._uuid(); // Ensure UUID format
+        // ID is already a UUID — no need to overwrite
         sb.from(table).insert(cloudRecord).then(function(res) {
           if (res.error) console.warn('Cloud create error (' + table + '):', res.error.message);
         });
         return result;
       };
 
-      // Wrap update
+      // Wrap update — find record in local cache and update cloud by same ID
       if (origUpdate) {
         dbSection.update = function(id, changes) {
           var result = origUpdate.call(dbSection, id, changes);
           var cloudChanges = CloudSync._toSnake(changes);
           cloudChanges.updated_at = new Date().toISOString();
-          // Try to find the UUID for this record
           var all = JSON.parse(localStorage.getItem(localKey) || '[]');
           var record = all.find(function(r) { return r.id === id; });
           if (record && record.id) {
@@ -100,6 +107,17 @@ var CloudSync = {
               if (res.error) console.warn('Cloud update error (' + table + '):', res.error.message);
             });
           }
+          return result;
+        };
+      }
+
+      // Wrap remove — delete from cloud when deleted locally
+      if (origRemove) {
+        dbSection.remove = function(id) {
+          var result = origRemove.call(dbSection, id);
+          sb.from(table).delete().eq('id', id).then(function(res) {
+            if (res.error) console.warn('Cloud delete error (' + table + '):', res.error.message);
+          });
           return result;
         };
       }
