@@ -130,6 +130,7 @@ var SupabaseDB = {
     }
     console.log('Initial sync complete');
     UI.toast('Data synced to cloud!');
+    SupabaseDB.startPaymentPolling();
   },
 
   _pullFromCloud: async function() {
@@ -174,6 +175,7 @@ var SupabaseDB = {
       }
     }
 
+    SupabaseDB.startPaymentPolling();
     if (totalPulled > 0) {
       console.log('Cloud sync complete: ' + totalPulled + ' total records');
       UI.toast(totalPulled + ' records synced from cloud');
@@ -193,10 +195,121 @@ var SupabaseDB = {
     }
   },
 
+  // Poll for new requests submitted via book.html (every 3 min)
+  startRequestPolling: function() {
+    if (window._requestPollStarted) return;
+    window._requestPollStarted = true;
+    setInterval(SupabaseDB._checkNewRequests, 3 * 60 * 1000);
+  },
+
+  _checkNewRequests: async function() {
+    if (!SupabaseDB.ready || !SupabaseDB.client) return;
+    try {
+      var since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+      var { data, error } = await SupabaseDB.client
+        .from('requests')
+        .select('id, client_name, client_phone, source, status, created_at')
+        .eq('status', 'new')
+        .gte('created_at', since);
+      if (error || !data || !data.length) return;
+
+      var localReqs = [];
+      try { localReqs = JSON.parse(localStorage.getItem('bm-requests') || '[]'); } catch(e) {}
+      var localIds = {};
+      localReqs.forEach(function(r) { localIds[r.id] = true; });
+
+      var newOnes = data.filter(function(r) { return !localIds[r.id]; });
+      if (!newOnes.length) return;
+
+      // Add to local
+      newOnes.forEach(function(remote) {
+        var local = {};
+        Object.keys(remote).forEach(function(k) {
+          var camel = k.replace(/_([a-z])/g, function(m, p) { return p.toUpperCase(); });
+          local[camel] = remote[k];
+        });
+        localReqs.unshift(local);
+        UI.toast('🆕 New request from ' + (remote.client_name || 'website') + '!', 'success');
+      });
+      localStorage.setItem('bm-requests', JSON.stringify(localReqs));
+
+      // Refresh requests page badge
+      if (typeof NotificationCenter !== 'undefined' && NotificationCenter.updateBadge) {
+        NotificationCenter.updateBadge();
+      }
+    } catch(e) {}
+  },
+
   // Force re-sync from cloud (can be called manually)
   resync: async function() {
     UI.toast('Syncing from cloud...');
     await SupabaseDB._pullFromCloud();
+  },
+
+  // Poll for new Stripe payments — runs every 2 min while app is open
+  // Updates localStorage so invoices flip to "paid" without a full refresh
+  _pollInterval: null,
+  startPaymentPolling: function() {
+    if (SupabaseDB._pollInterval) return; // already running
+    SupabaseDB._checkNewPayments(); // run once immediately
+    SupabaseDB._pollInterval = setInterval(function() {
+      SupabaseDB._checkNewPayments();
+    }, 2 * 60 * 1000); // every 2 minutes
+  },
+
+  _checkNewPayments: async function() {
+    if (!SupabaseDB.ready || !SupabaseDB.client) return;
+    try {
+      // Look for invoices paid in the last 10 minutes
+      var since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      var { data, error } = await SupabaseDB.client
+        .from('invoices')
+        .select('id, invoice_number, client_name, amount_paid, paid_date, status, payment_method, stripe_payment_id')
+        .eq('status', 'paid')
+        .gte('updated_at', since)
+        .eq('payment_method', 'stripe');
+
+      if (error || !data || data.length === 0) return;
+
+      // Check which ones are new to localStorage
+      var localInvoices = [];
+      try { localInvoices = JSON.parse(localStorage.getItem('bm-invoices') || '[]'); } catch(e) {}
+
+      var newPayments = [];
+      data.forEach(function(remote) {
+        var local = localInvoices.find(function(l) {
+          return l.id === remote.id || l.invoiceNumber === remote.invoice_number;
+        });
+        if (local && local.status !== 'paid') {
+          // Update locally
+          local.status = 'paid';
+          local.balance = 0;
+          local.amountPaid = remote.amount_paid;
+          local.paidDate = remote.paid_date;
+          local.paymentMethod = remote.payment_method || 'stripe';
+          local.stripePaymentId = remote.stripe_payment_id;
+          newPayments.push(remote);
+        }
+      });
+
+      if (newPayments.length > 0) {
+        localStorage.setItem('bm-invoices', JSON.stringify(localInvoices));
+        newPayments.forEach(function(p) {
+          var amt = p.amount_paid ? '$' + parseFloat(p.amount_paid).toFixed(2) : '';
+          UI.toast('💳 Payment received! Invoice #' + p.invoice_number + ' — ' + amt + ' (Stripe)', 'success');
+        });
+        // Refresh page if on invoices
+        if (typeof loadPage === 'function' && document.querySelector('.nav-item.active')) {
+          var active = document.querySelector('.nav-item.active');
+          var match = (active.getAttribute('onclick') || '').match(/loadPage\('(\w+)'\)/);
+          if (match && (match[1] === 'invoices' || match[1] === 'dashboard' || match[1] === 'payments')) {
+            loadPage(match[1]);
+          }
+        }
+      }
+    } catch(e) {
+      // Silent fail — polling is background
+    }
   },
 
   _uuid: function() {
