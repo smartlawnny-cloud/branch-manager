@@ -2,6 +2,15 @@
  * Branch Manager — Invoices Page
  */
 var InvoicesPage = {
+  _co: function() {
+    return {
+      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
+      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
+      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
+      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+    };
+  },
+
   _page: 0, _perPage: 50, _search: '', _filter: 'all', _sortCol: 'invoiceNumber', _sortDir: 'desc',
 
   render: function() {
@@ -74,6 +83,7 @@ var InvoicesPage = {
         return out;
       })()
       + '</div>'
+      + '<button onclick="InvoicesPage._generateFromJobs()" style="font-size:12px;padding:5px 14px;border-radius:20px;border:1px solid #e07c24;background:#fff3e0;color:#e07c24;cursor:pointer;font-weight:600;">⚡ Generate from Jobs</button>'
       + '<div class="search-box" style="min-width:200px;max-width:280px;">'
       + '<span style="color:var(--text-light);">🔍</span>'
       + '<input type="text" placeholder="Search invoices..." value="' + UI.esc(self._search) + '" oninput="InvoicesPage._search=this.value;InvoicesPage._page=0;loadPage(\'invoices\')">'
@@ -92,6 +102,7 @@ var InvoicesPage = {
 
     html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'
       + '<table class="data-table"><thead><tr>'
+      + '<th style="width:36px;"><input type="checkbox" onchange="InvoicesPage._toggleAll(this.checked)" title="Select all"></th>'
       + self._sortTh('Client', 'clientName') + self._sortTh('#', 'invoiceNumber') + self._sortTh('Issued', 'createdAt') + '<th>Subject</th>' + self._sortTh('Status', 'status') + self._sortTh('Total', 'total', 'text-align:right;') + self._sortTh('Balance', 'balance', 'text-align:right;')
       + '</tr></thead><tbody>';
 
@@ -100,6 +111,7 @@ var InvoicesPage = {
     } else {
       page.forEach(function(inv) {
         html += '<tr style="cursor:pointer;" onclick="InvoicesPage.showDetail(\'' + inv.id + '\')">'
+          + '<td onclick="event.stopPropagation()"><input type="checkbox" class="inv-check" data-id="' + inv.id + '" onchange="InvoicesPage._updateBatch()"></td>'
           + '<td><strong>' + UI.esc(inv.clientName || '—') + '</strong></td>'
           + '<td>#' + (inv.invoiceNumber || '') + '</td>'
           + '<td style="white-space:nowrap;">' + UI.dateShort(inv.createdAt || inv.date) + '</td>'
@@ -177,7 +189,22 @@ var InvoicesPage = {
     if (count) count.textContent = selected.length + ' selected';
   },
   _getSelected: function() {
-    return Array.from(document.querySelectorAll('.inv-check:checked')).map(function(cb) { return cb.value; });
+    return Array.from(document.querySelectorAll('.inv-check:checked')).map(function(cb) { return cb.getAttribute('data-id') || cb.value; });
+  },
+  _toggleAll: function(checked) {
+    document.querySelectorAll('.inv-check').forEach(function(cb) { cb.checked = checked; });
+    InvoicesPage._updateBatch();
+  },
+  _updateBatch: function() {
+    var selected = InvoicesPage._getSelected();
+    var bar = document.getElementById('inv-batch-bar');
+    var count = document.getElementById('inv-batch-count');
+    if (selected.length > 0) {
+      bar.style.display = 'flex';
+      count.textContent = selected.length + ' selected';
+    } else {
+      bar.style.display = 'none';
+    }
   },
   _sendInvoice: function(id) {
     var inv = DB.invoices.getById(id);
@@ -291,7 +318,67 @@ var InvoicesPage = {
     document.querySelectorAll('.inv-check').forEach(function(cb) { cb.checked = false; });
     var headerCheck = document.querySelector('th input[type="checkbox"]');
     if (headerCheck) headerCheck.checked = false;
-    InvoicesPage._updateBatchBar();
+    InvoicesPage._updateBatch();
+  },
+
+  _generateFromJobs: function() {
+    var allJobs = DB.jobs.getAll();
+    var allInvoices = DB.invoices.getAll();
+    var invoicedJobIds = allInvoices.map(function(i) { return i.jobId; }).filter(Boolean);
+    var uninvoiced = allJobs.filter(function(j) {
+      return j.status === 'completed' && invoicedJobIds.indexOf(j.id) === -1;
+    });
+
+    if (uninvoiced.length === 0) {
+      UI.toast('All completed jobs already have invoices', 'error');
+      return;
+    }
+
+    var html = '<p style="margin:0 0 16px;font-size:13px;color:var(--text-light);">' + uninvoiced.length + ' completed jobs without invoices. Select which ones to generate:</p>';
+    html += '<div style="max-height:350px;overflow-y:auto;">';
+    uninvoiced.forEach(function(j) {
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px;margin-bottom:6px;cursor:pointer;">'
+        + '<input type="checkbox" checked class="gen-inv-check" data-id="' + j.id + '">'
+        + '<div style="flex:1;"><div style="font-weight:600;font-size:13px;">' + UI.esc(j.clientName || '—') + ' — #' + (j.jobNumber || '') + '</div>'
+        + '<div style="font-size:11px;color:var(--text-light);">' + UI.esc(j.description || j.property || '') + ' · ' + UI.money(j.total || 0) + '</div></div>'
+        + '</label>';
+    });
+    html += '</div>';
+
+    UI.showModal('Generate Invoices (' + uninvoiced.length + ' jobs)', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
+        + ' <button class="btn btn-primary" onclick="InvoicesPage._doGenerate()">Generate Selected</button>'
+    });
+  },
+
+  _doGenerate: function() {
+    var checks = document.querySelectorAll('.gen-inv-check:checked');
+    var count = 0;
+    checks.forEach(function(cb) {
+      var jobId = cb.getAttribute('data-id');
+      var j = DB.jobs.getById(jobId);
+      if (!j) return;
+      var invNum = DB.invoices.getAll().length + count + 1;
+      DB.invoices.create({
+        invoiceNumber: invNum,
+        clientId: j.clientId,
+        clientName: j.clientName,
+        clientEmail: j.clientEmail,
+        clientPhone: j.clientPhone,
+        jobId: j.id,
+        subject: 'For Services Rendered',
+        lineItems: j.lineItems || [],
+        total: j.total || 0,
+        balance: j.total || 0,
+        issuedDate: new Date().toISOString().split('T')[0],
+        status: 'draft'
+      });
+      DB.jobs.update(jobId, { invoiceId: 'generated' });
+      count++;
+    });
+    UI.closeModal();
+    UI.toast(count + ' invoice' + (count !== 1 ? 's' : '') + ' generated! 🧾');
+    loadPage('invoices');
   },
 
   _getPayLink: function(id) {
@@ -344,19 +431,19 @@ var InvoicesPage = {
     var firstName = (inv.clientName || '').split(' ')[0] || 'there';
     var payLink = InvoicesPage._getPayLink(id);
     var amtDue = UI.money(inv.balance || inv.total);
-    var subject = 'Invoice #' + inv.invoiceNumber + ' from Second Nature Tree Service — ' + amtDue;
+    var subject = 'Invoice #' + inv.invoiceNumber + ' from ' + InvoicesPage._co().name + ' — ' + amtDue;
 
     // Plain text fallback
     var body = 'Hi ' + firstName + ',\n\n'
-      + 'Thank you for choosing Second Nature Tree Service! Your invoice is ready:\n\n'
+      + 'Thank you for choosing ' + InvoicesPage._co().name + '! Your invoice is ready:\n\n'
       + '  Invoice #' + inv.invoiceNumber + '\n'
       + (inv.subject ? '  Job: ' + inv.subject + '\n' : '')
       + '  Amount Due: ' + amtDue + '\n'
       + (inv.dueDate ? '  Due: ' + UI.dateShort(inv.dueDate) + '\n' : '') + '\n'
       + 'Pay online (card, or tip optional):\n' + payLink + '\n\n'
       + 'Also accepted: Venmo (@SecondNatureTree), Zelle (info@peekskilltree.com), check, or cash.\n\n'
-      + 'Questions? Reply to this email or call/text (914) 391-5233.\n\n'
-      + 'Thanks,\nDoug Brown\nSecond Nature Tree Service\n(914) 391-5233\npeekskilltree.com';
+      + 'Questions? Reply to this email or call/text ' + InvoicesPage._co().phone + '.\n\n'
+      + 'Thanks,\nDoug Brown\n' + InvoicesPage._co().name + '\n' + InvoicesPage._co().phone + '\n' + InvoicesPage._co().website;
 
     // Branded HTML email
     var lineItemsHtml = '';
@@ -374,7 +461,7 @@ var InvoicesPage = {
       + '<div style="max-width:520px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
       // Header
       + '<div style="background:linear-gradient(135deg,#1a3c12 0%,#00836c 100%);border-radius:12px 12px 0 0;padding:24px 28px;color:#fff;">'
-      + '<div style="font-size:13px;opacity:.8;margin-bottom:4px;">🌳 Second Nature Tree Service</div>'
+      + '<div style="font-size:13px;opacity:.8;margin-bottom:4px;">🌳 ' + InvoicesPage._co().name + '</div>'
       + '<div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;">Invoice #' + inv.invoiceNumber + '</div>'
       + '<div style="font-size:38px;font-weight:900;margin:8px 0 4px;letter-spacing:-1px;">' + amtDue + '</div>'
       + '<div style="font-size:13px;opacity:.75;">' + (inv.dueDate ? 'Due ' + UI.dateShort(inv.dueDate) : 'Balance due') + ' &nbsp;·&nbsp; ' + (inv.clientName||'') + '</div>'
@@ -382,7 +469,7 @@ var InvoicesPage = {
       // Body
       + '<div style="background:#fff;border-radius:0 0 12px 12px;padding:24px 28px;">'
       + '<p style="font-size:15px;color:#2d3748;margin-bottom:16px;">Hi ' + firstName + ',</p>'
-      + '<p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px;">Thank you for choosing Second Nature Tree Service! Your invoice is ready to view and pay online.</p>'
+      + '<p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px;">Thank you for choosing ' + InvoicesPage._co().name + '! Your invoice is ready to view and pay online.</p>'
       + (inv.subject ? '<p style="font-size:13px;color:#718096;margin-bottom:16px;">📋 <strong>Job:</strong> ' + inv.subject + '</p>' : '')
       + lineItemsHtml
       // Pay button
@@ -396,8 +483,8 @@ var InvoicesPage = {
       + '• <strong>Zelle:</strong> info@peekskilltree.com<br>'
       + '• <strong>Check/Cash:</strong> 1 Highland Industrial Park, Peekskill NY 10566'
       + '</div>'
-      + '<p style="font-size:13px;color:#718096;margin-top:16px;">Questions? Reply to this email or call/text <strong>(914) 391-5233</strong>.</p>'
-      + '<p style="font-size:13px;color:#2d3748;margin-top:12px;">Thanks,<br><strong>Doug Brown</strong><br>Second Nature Tree Service</p>'
+      + '<p style="font-size:13px;color:#718096;margin-top:16px;">Questions? Reply to this email or call/text <strong>' + InvoicesPage._co().phone + '</strong>.</p>'
+      + '<p style="font-size:13px;color:#2d3748;margin-top:12px;">Thanks,<br><strong>Doug Brown</strong><br>' + InvoicesPage._co().name + '</p>'
       + '</div></div></div>';
 
     if (typeof Email !== 'undefined') {

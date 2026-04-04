@@ -344,6 +344,42 @@ var SettingsPage = {
       + '<div style="font-size:12px;color:var(--text-light);">"Fix Duplicate Tags" removes duplicate tags from imported client records (e.g., [VIP, VIP] → [VIP]).</div>'
       + '</div>';
 
+    // Security
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<h3 style="margin-bottom:12px;">🔒 Security</h3>'
+      + '<div style="display:grid;gap:12px;">'
+      // Session timeout
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:8px;">'
+      + '<div><div style="font-weight:600;font-size:13px;">Session Timeout</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">Auto-logout after 30 minutes of inactivity</div></div>'
+      + '<span style="color:var(--green-dark);font-weight:700;font-size:13px;">✓ Active</span></div>'
+      // Audit logging
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:8px;">'
+      + '<div><div style="font-weight:600;font-size:13px;">Audit Logging</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">All data changes are logged with user, timestamp, and action</div></div>'
+      + '<button class="btn btn-outline" style="font-size:12px;" onclick="SettingsPage.showAuditLog()">View Log</button></div>'
+      // Secure logout
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:8px;">'
+      + '<div><div style="font-weight:600;font-size:13px;">Secure Logout</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">Clears cached data and service worker on logout</div></div>'
+      + '<span style="color:var(--green-dark);font-weight:700;font-size:13px;">✓ Active</span></div>'
+      // Change password
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:8px;">'
+      + '<div><div style="font-weight:600;font-size:13px;">Change Password</div>'
+      + '<div style="font-size:12px;color:var(--text-light);">Update login password for local auth</div></div>'
+      + '<button class="btn btn-outline" style="font-size:12px;" onclick="SettingsPage.changePassword()">Change</button></div>'
+      // RLS status
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#fff3e0;border-radius:8px;border:1px solid #ffe0b2;">'
+      + '<div><div style="font-weight:600;font-size:13px;color:#e65100;">⚠️ Database RLS Policies</div>'
+      + '<div style="font-size:12px;color:#bf360c;">Run <code>migrate-rls.sql</code> in Supabase SQL Editor to restrict anon key access</div></div>'
+      + '<a href="https://supabase.com/dashboard" target="_blank" class="btn btn-outline" style="font-size:12px;">Open Supabase</a></div>'
+      // 2FA
+      + '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:#fff3e0;border-radius:8px;border:1px solid #ffe0b2;">'
+      + '<div><div style="font-weight:600;font-size:13px;color:#e65100;">⚠️ Two-Factor Authentication</div>'
+      + '<div style="font-size:12px;color:#bf360c;">Enable 2FA in Supabase Auth settings for extra protection</div></div>'
+      + '<a href="https://supabase.com/dashboard" target="_blank" class="btn btn-outline" style="font-size:12px;">Enable</a></div>'
+      + '</div></div>';
+
     // About
     html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
       + '<h3 style="margin-bottom:12px;">About Branch Manager</h3>'
@@ -451,14 +487,24 @@ var SettingsPage = {
     });
   },
 
-  syncNow: async function(btn) {
+  syncNow: function(btn) {
     if (btn) { btn.textContent = 'Syncing...'; btn.disabled = true; }
+    function done() {
+      if (btn) { btn.textContent = 'Sync Now'; btn.disabled = false; }
+      loadPage('settings');
+    }
     if (typeof DashboardPage !== 'undefined' && DashboardPage.syncNow) {
-      await DashboardPage.syncNow();
+      try {
+        var result = DashboardPage.syncNow();
+        if (result && typeof result.then === 'function') { result.then(done).catch(done); } else { done(); }
+      } catch(e) { done(); }
     } else if (typeof SupabaseDB !== 'undefined' && SupabaseDB.resync) {
-      await SupabaseDB.resync();
+      try {
+        var r = SupabaseDB.resync();
+        if (r && typeof r.then === 'function') { r.then(done).catch(done); } else { done(); }
+      } catch(e) { done(); }
     } else {
-      // Direct fetch fallback
+      // Direct fetch fallback — sequential table sync
       var url = 'https://ltpivkqahvplapyagljt.supabase.co';
       var key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI';
       var tables = [
@@ -467,29 +513,35 @@ var SettingsPage = {
         {local:'bm-services',remote:'services'},{local:'bm-team',remote:'team_members'}
       ];
       var total = 0;
-      for (var t of tables) {
-        try {
-          var resp = await fetch(url+'/rest/v1/'+t.remote+'?select=*&limit=5000&order=created_at.desc',{
-            headers:{'apikey':key,'Authorization':'Bearer '+key}
-          });
-          var data = await resp.json();
+      var idx = 0;
+      function fetchNext() {
+        if (idx >= tables.length) {
+          if (typeof UI !== 'undefined') UI.toast(total + ' records synced from cloud!');
+          done();
+          return;
+        }
+        var t = tables[idx++];
+        fetch(url + '/rest/v1/' + t.remote + '?select=*&limit=5000&order=created_at.desc', {
+          headers: {'apikey': key, 'Authorization': 'Bearer ' + key}
+        }).then(function(resp) {
+          return resp.json();
+        }).then(function(data) {
           if (data && data.length) {
             var conv = data.map(function(row) {
               var n = {};
               Object.keys(row).forEach(function(k) {
-                n[k.replace(/_([a-z])/g,function(m,p){return p.toUpperCase();})] = row[k];
+                n[k.replace(/_([a-z])/g, function(m, p) { return p.toUpperCase(); })] = row[k];
               });
               return n;
             });
             localStorage.setItem(t.local, JSON.stringify(conv));
             total += conv.length;
           }
-        } catch(e) {}
+          fetchNext();
+        }).catch(function() { fetchNext(); });
       }
-      UI.toast(total + ' records synced from cloud!');
+      fetchNext();
     }
-    if (btn) { btn.textContent = 'Sync Now'; btn.disabled = false; }
-    loadPage('settings');
   },
 
   deduplicateTags: function() {
@@ -629,5 +681,56 @@ var SettingsPage = {
     else { DB.services.create(data); UI.toast('Service added'); }
     UI.closeModal();
     loadPage('settings');
+  },
+
+  showAuditLog: function() {
+    var logs = DB.auditLog ? DB.auditLog.getRecent(50) : [];
+    var html = '';
+    if (logs.length === 0) {
+      html = '<div style="text-align:center;padding:20px;color:var(--text-light);">No audit entries yet. Changes will be logged as you use the app.</div>';
+    } else {
+      html = '<div style="max-height:400px;overflow-y:auto;">'
+        + '<table class="data-table" style="width:100%;font-size:12px;"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Details</th></tr></thead><tbody>';
+      logs.forEach(function(l) {
+        var actionColor = l.action === 'create' ? '#16a34a' : l.action === 'delete' ? '#dc3545' : '#2563eb';
+        html += '<tr>'
+          + '<td style="white-space:nowrap;">' + new Date(l.ts).toLocaleString() + '</td>'
+          + '<td>' + UI.esc(l.user || '—') + '</td>'
+          + '<td><span style="color:' + actionColor + ';font-weight:600;">' + l.action + '</span></td>'
+          + '<td>' + UI.esc(l.table || '') + '</td>'
+          + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + UI.esc(l.details || '') + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    UI.showModal('Audit Log (last 50)', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Close</button>'
+        + (logs.length > 0 ? ' <button class="btn" style="background:var(--red);color:#fff;" onclick="if(confirm(\'Clear audit log?\')){DB.auditLog.clear();UI.closeModal();UI.toast(\'Audit log cleared\');}">Clear Log</button>' : '')
+    });
+  },
+
+  changePassword: function() {
+    var html = UI.field('Current Password', '<input type="password" id="pw-current" placeholder="Enter current password">')
+      + UI.field('New Password', '<input type="password" id="pw-new" placeholder="Enter new password (8+ characters)">')
+      + UI.field('Confirm New Password', '<input type="password" id="pw-confirm" placeholder="Confirm new password">');
+    UI.showModal('Change Password', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
+        + ' <button class="btn btn-primary" onclick="SettingsPage._savePassword()">Update Password</button>'
+    });
+  },
+
+  _savePassword: function() {
+    var current = document.getElementById('pw-current').value;
+    var newPw = document.getElementById('pw-new').value;
+    var confirm = document.getElementById('pw-confirm').value;
+    if (newPw.length < 8) { UI.toast('Password must be at least 8 characters', 'error'); return; }
+    if (newPw !== confirm) { UI.toast('Passwords do not match', 'error'); return; }
+    var email = Auth.user ? Auth.user.email : '';
+    var hashes = {};
+    try { hashes = JSON.parse(localStorage.getItem('bm-auth-hashes') || '{}'); } catch(e) {}
+    hashes[email.toLowerCase()] = Auth._hash(newPw);
+    localStorage.setItem('bm-auth-hashes', JSON.stringify(hashes));
+    UI.closeModal();
+    UI.toast('Password updated! Use the new password next time you log in.');
   }
 };

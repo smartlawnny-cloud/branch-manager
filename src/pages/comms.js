@@ -70,7 +70,7 @@ var CommsLog = {
       direction: direction,
       notes: notes,
       date: new Date().toISOString(),
-      user: 'Doug' // Will use auth user later
+      user: (typeof Auth !== 'undefined' && Auth.user && Auth.user.name) ? Auth.user.name : (localStorage.getItem('bm-co-name') || 'Owner').split(' ')[0]
     };
 
     var key = 'bm-comms-' + clientId;
@@ -116,9 +116,24 @@ var CommsLog = {
     var recent = CommsLog.getRecent(50);
     var icons = { call: '📞', text: '💬', email: '📧', note: '📌', visit: '🏠', voicemail: '📱' };
 
+    // Stats
+    var calls = recent.filter(function(c) { return c.type === 'call'; }).length;
+    var texts = recent.filter(function(c) { return c.type === 'text'; }).length;
+    var emails = recent.filter(function(c) { return c.type === 'email'; }).length;
+    var notes = recent.filter(function(c) { return c.type === 'note'; }).length;
+
     var html = '<div style="max-width:720px;">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
       + '<div><h2 style="margin:0;font-size:22px;">Communication Log</h2><p style="margin:4px 0 0;color:var(--text-light);font-size:13px;">All calls, texts, emails, and notes across clients</p></div>'
+      + '<button class="btn btn-primary" style="font-size:12px;" onclick="CommsLog.quickLog()">+ Log Communication</button>'
+      + '</div>';
+
+    // Stat cards
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">'
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;">' + calls + '</div><div style="font-size:11px;color:var(--text-light);">📞 Calls</div></div>'
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;">' + texts + '</div><div style="font-size:11px;color:var(--text-light);">💬 Texts</div></div>'
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;">' + emails + '</div><div style="font-size:11px;color:var(--text-light);">📧 Emails</div></div>'
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;">' + notes + '</div><div style="font-size:11px;color:var(--text-light);">📌 Notes</div></div>'
       + '</div>';
 
     if (!recent.length) {
@@ -146,7 +161,7 @@ var CommsLog = {
             + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">'
             + '<span style="font-weight:600;font-size:13px;text-transform:capitalize;">' + c.type
             + ' <span style="font-size:11px;color:' + dirColor + ';font-weight:400;">' + dirLabel + '</span>'
-            + (clientName ? ' <span style="font-size:12px;color:var(--text-light);font-weight:400;">— <a href="#" onclick="loadPage(\'clients\');return false;" style="color:var(--accent);text-decoration:none;">' + UI.esc(clientName) + '</a></span>' : '')
+            + (clientName ? ' <span style="font-size:12px;color:var(--text-light);font-weight:400;">— <a href="#" onclick="if(typeof ClientsPage!==\'undefined\')ClientsPage.showDetail(\'' + c.clientId + '\');else loadPage(\'clients\');return false;" style="color:var(--accent);text-decoration:none;">' + UI.esc(clientName) + '</a></span>' : '')
             + '</span>'
             + '<span style="font-size:11px;color:var(--text-light);">' + UI.timeAgo(c.date) + '</span>'
             + '</div>'
@@ -157,5 +172,42 @@ var CommsLog = {
     }
     html += '</div>';
     return html;
+  },
+
+  quickLog: function() {
+    var clients = DB.clients.getAll().sort(function(a,b) { return (a.name||'').localeCompare(b.name||''); });
+    var opts = '<option value="">— Select client —</option>';
+    clients.slice(0, 100).forEach(function(c) { opts += '<option value="' + c.id + '">' + UI.esc(c.name) + '</option>'; });
+
+    var html = UI.field('Client', '<select id="ql-client">' + opts + '</select>')
+      + UI.field('Type', '<select id="ql-type"><option value="call">📞 Call</option><option value="text">💬 Text</option><option value="email">📧 Email</option><option value="note">📌 Note</option><option value="visit">🏠 Site Visit</option></select>')
+      + UI.field('Direction', '<select id="ql-dir"><option value="outbound">→ Outbound</option><option value="inbound">← Inbound</option></select>')
+      + UI.field('Notes', '<textarea id="ql-notes" placeholder="What was discussed?" style="min-height:80px;"></textarea>');
+
+    UI.showModal('Log Communication', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
+        + ' <button class="btn btn-primary" onclick="CommsLog._saveQuickLog()">Save</button>'
+    });
+  },
+
+  _saveQuickLog: function() {
+    var clientId = document.getElementById('ql-client').value;
+    if (!clientId) { UI.toast('Please select a client', 'error'); return; }
+    var type = document.getElementById('ql-type').value;
+    var direction = document.getElementById('ql-dir').value;
+    var notes = document.getElementById('ql-notes').value;
+
+    var comms = CommsLog.getAll(clientId);
+    comms.push({
+      type: type,
+      direction: direction,
+      notes: notes,
+      date: new Date().toISOString(),
+      clientId: clientId
+    });
+    CommsLog.save(clientId, comms);
+    UI.closeModal();
+    UI.toast('Communication logged');
+    loadPage('comms');
   }
 };
