@@ -579,6 +579,7 @@
         <button class="nav-item" data-page="team"><span class="icon"><i data-lucide="hard-hat" class="li"></i></span> Team</button>
         <button class="nav-item" data-page="timesheet"><span class="icon"><i data-lucide="clock" class="li"></i></span> Timesheets</button>
         <button class="nav-item" data-page="payroll"><span class="icon"><i data-lucide="wallet" class="li"></i></span> Payroll</button>
+        <button class="nav-item" data-page="permissions"><span class="icon"><i data-lucide="shield" class="li"></i></span> Permissions</button>
         <!-- Money -->
         <button class="nav-item" data-page="expenses"><span class="icon"><i data-lucide="trending-up" class="li"></i></span> Expenses</button>
         <button class="nav-item" data-page="insights"><span class="icon"><i data-lucide="bar-chart-3" class="li"></i></span> Reporting</button>
@@ -780,6 +781,7 @@ if (!localStorage.getItem('bm-supabase-url')) {
 <script src="src/pages/mediacenter.js?v=2"></script>
 <script src="src/pages/reminders.js?v=3"></script>
 <script src="src/pages/payroll.js?v=80"></script>
+<script src="src/pages/permissions.js?v=80"></script>
 <script>
 // ── Navigation ──
 var currentPage = 'dashboard';
@@ -866,7 +868,8 @@ var pageConfigs = {
   visits: { title: 'Visits', action: null },
   workflow: { title: 'Workflow', action: null },
   propertymap: { title: 'Property Map', action: null },
-  payroll: { title: 'Payroll', action: '📊 Summary', actionFn: 'PayrollPage.showPayrollSummary(PayrollPage._getWeekDates(PayrollPage._weekOffset)[0])' }
+  payroll: { title: 'Payroll', action: '📊 Summary', actionFn: 'PayrollPage.showPayrollSummary(PayrollPage._getWeekDates(PayrollPage._weekOffset)[0])' },
+  permissions: { title: 'Permissions & Roles', action: null }
 };
 
 var pageRenderers = {
@@ -926,6 +929,7 @@ var pageRenderers = {
   workflow: function() { return Workflow.render(); },
   propertymap: function() { return PropertyMap.render(); },
   payroll: function() { return PayrollPage.render(); },
+  permissions: function() { return RBAC.render(); },
   calculators: function() {
     return '<div class="stat-grid">'
       + '<div class="stat-card" style="cursor:pointer;" onclick="Estimator.show()">'
