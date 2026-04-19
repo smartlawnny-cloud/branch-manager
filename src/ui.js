@@ -9,7 +9,7 @@ var UI = (function() {
     options = options || {};
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = '<div class="modal' + (options.wide ? ' modal-wide' : '') + '">'
+    overlay.innerHTML = '<div class="modal' + (options.wide ? ' modal-wide' : '') + (options.full ? ' modal-full' : '') + '">'
       + '<div class="modal-header">'
       + '<h3>' + title + '</h3>'
       + '<button class="modal-close" onclick="UI.closeModal()">&times;</button>'
@@ -18,13 +18,23 @@ var UI = (function() {
       + (options.footer ? '<div class="modal-footer">' + options.footer + '</div>' : '')
       + '</div>';
     overlay.addEventListener('click', function(e) { if (e.target === overlay) UI.closeModal(); });
+
+    // ESC key closes the modal
+    var escHandler = function(e) { if (e.key === 'Escape') UI.closeModal(); };
+    document.addEventListener('keydown', escHandler);
+    overlay._escHandler = escHandler;
+
     document.body.appendChild(overlay);
     requestAnimationFrame(function() { overlay.classList.add('open'); });
     return overlay;
   }
   function closeModal() {
     var m = document.querySelector('.modal-overlay');
-    if (m) { m.classList.remove('open'); setTimeout(function() { m.remove(); }, 200); }
+    if (m) {
+      if (m._escHandler) document.removeEventListener('keydown', m._escHandler);
+      m.classList.remove('open');
+      setTimeout(function() { m.remove(); }, 200);
+    }
   }
 
   // ── Status Badge ──
@@ -121,9 +131,11 @@ var UI = (function() {
   }
 
   // ── Confirm Dialog ──
-  function confirm(message, onYes) {
+  function confirm(message, onYes, onNo) {
+    window._uiConfirmYes = onYes;
+    window._uiConfirmNo = onNo;
     showModal('Confirm', '<p style="font-size:15px;margin-bottom:16px;">' + message + '</p>',
-      { footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button> <button class="btn btn-primary" onclick="UI.closeModal();(' + onYes.toString() + ')()">Yes, Continue</button>' });
+      { footer: '<button class="btn btn-outline" onclick="UI.closeModal();if(window._uiConfirmNo)window._uiConfirmNo();">Cancel</button> <button class="btn btn-primary" onclick="UI.closeModal();if(window._uiConfirmYes)window._uiConfirmYes();">Yes, Continue</button>' });
   }
 
   // ── Toast / Notification ──

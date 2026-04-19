@@ -1,6 +1,6 @@
 /**
- * Branch Manager — Claude AI Assistant
- * Built-in AI powered by Claude for estimates, client comms, business insights
+ * Branch Manager — AI Assistant
+ * Built-in AI Assistant for estimates, client comms, business insights
  */
 var AI = {
   // Static prompts — stored here to avoid apostrophe escaping issues in onclick HTML attributes
@@ -23,7 +23,7 @@ var AI = {
       + '<div style="display:flex;align-items:center;gap:10px;">'
       + '<div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#D4A574 0%,#C4956A 100%);display:flex;align-items:center;justify-content:center;">'
       + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
-      + '<div><div style="font-weight:700;font-size:15px;">Claude AI Assistant</div>'
+      + '<div><div style="font-weight:700;font-size:15px;">AI Assistant</div>'
       + '<div style="font-size:11px;color:var(--text-light);">Your tree service business assistant</div></div></div>'
       + '<div style="display:flex;gap:4px;">'
       + '<button onclick="AI._copyConversation();" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-light);padding:4px 8px;" title="Copy conversation">📋 Copy</button>'
@@ -35,7 +35,7 @@ var AI = {
       html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:20px;">'
         + '<div style="text-align:center;max-width:340px;">'
         + '<div style="font-size:48px;margin-bottom:16px;">🤖</div>'
-        + '<h3 style="margin-bottom:8px;">Connect Claude AI</h3>'
+        + '<h3 style="margin-bottom:8px;">Connect AI Assistant</h3>'
         + '<p style="font-size:13px;color:var(--text-light);margin-bottom:16px;line-height:1.6;">Enter your Anthropic API key to enable AI-powered estimates, client emails, and business insights. Your key is stored locally — never sent to anyone but Anthropic.</p>'
         + '<input type="password" id="ai-key-input" placeholder="sk-ant-api03-..." style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:12px;">'
         + '<button class="btn btn-primary" onclick="AI._saveKey();AI._refreshInline();" style="width:100%;">Connect</button>'
@@ -82,13 +82,13 @@ var AI = {
 
     html += '<div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;">'
       + '<div style="display:flex;gap:8px;align-items:flex-end;">'
-      + '<textarea id="ai-input" rows="1" placeholder="Ask Claude anything about your business..." '
+      + '<textarea id="ai-input" rows="1" placeholder="Ask anything about your business..." '
       + 'style="flex:1;padding:10px 14px;border:2px solid var(--border);border-radius:12px;font-size:14px;resize:none;max-height:100px;font-family:inherit;line-height:1.4;" '
       + 'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();AI._inlineSend();}" '
       + 'oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,100)+\'px\'"></textarea>'
       + '<button onclick="AI._inlineSend()" style="background:linear-gradient(135deg,#D4A574 0%,#C4956A 100%);color:#fff;border:none;border-radius:12px;width:44px;height:44px;cursor:pointer;font-size:18px;flex-shrink:0;">↑</button>'
       + '</div>'
-      + '<div style="font-size:10px;color:var(--text-light);text-align:center;margin-top:6px;">Powered by Claude · Anthropic</div>'
+      + '<div style="font-size:10px;color:var(--text-light);text-align:center;margin-top:6px;">Powered by AI</div>'
       + '</div>';
     return html;
   },
@@ -121,7 +121,7 @@ var AI = {
     }).catch(function(err) {
       AI._loading = false;
       AI._removeTyping();
-      AI._messages.push({ role: 'assistant', content: 'Error: ' + (err.message || 'Could not reach Claude API. Check your key in Settings.') });
+      AI._messages.push({ role: 'assistant', content: 'Error: ' + (err.message || 'Could not reach the AI. . Check your key in Settings.') });
       AI._refreshMessages();
       AI._scrollToBottom();
     });
@@ -194,7 +194,7 @@ var AI = {
       + '<div style="display:flex;align-items:center;gap:10px;">'
       + '<div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#D4A574 0%,#C4956A 100%);display:flex;align-items:center;justify-content:center;">'
       + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
-      + '<div><div style="font-weight:700;font-size:15px;">Claude AI</div>'
+      + '<div><div style="font-weight:700;font-size:15px;">AI Assistant</div>'
       + '<div style="font-size:11px;color:var(--text-light);">Your tree service assistant</div></div></div>'
       + '<div style="display:flex;gap:4px;">'
       + '<button onclick="AI._copyConversation()" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-light);padding:4px 8px;" title="Copy conversation">📋</button>'
@@ -207,7 +207,7 @@ var AI = {
       html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:20px;">'
         + '<div style="text-align:center;max-width:320px;">'
         + '<div style="font-size:40px;margin-bottom:12px;">🤖</div>'
-        + '<h3 style="margin-bottom:8px;">Connect Claude AI</h3>'
+        + '<h3 style="margin-bottom:8px;">Connect AI Assistant</h3>'
         + '<p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">Enter your Anthropic API key to enable AI-powered estimates, client emails, and business insights.</p>'
         + '<input type="password" id="ai-key-input" placeholder="sk-ant-..." style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:12px;">'
         + '<button class="btn btn-primary" onclick="AI._saveKey()" style="width:100%;">Connect</button>'
@@ -251,13 +251,13 @@ var AI = {
     // Input area
     html += '<div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;">'
       + '<div style="display:flex;gap:8px;align-items:flex-end;">'
-      + '<textarea id="ai-input" rows="1" placeholder="Ask Claude anything..." '
+      + '<textarea id="ai-input" rows="1" placeholder="Ask anything..." '
       + 'style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:12px;font-size:14px;resize:none;max-height:100px;font-family:inherit;line-height:1.4;" '
       + 'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();AI.send();}" '
       + 'oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,100)+\'px\'"></textarea>'
       + '<button onclick="AI.send()" style="background:linear-gradient(135deg,#D4A574 0%,#C4956A 100%);color:#fff;border:none;border-radius:12px;width:40px;height:40px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">↑</button>'
       + '</div>'
-      + '<div style="font-size:10px;color:var(--text-light);text-align:center;margin-top:6px;">Powered by Claude · Anthropic</div>'
+      + '<div style="font-size:10px;color:var(--text-light);text-align:center;margin-top:6px;">Powered by AI</div>'
       + '</div>';
 
     return html;
@@ -275,7 +275,7 @@ var AI = {
       + (isUser ? 'background:var(--accent);color:#fff;' : 'background:linear-gradient(135deg,#D4A574,#C4956A);color:#fff;') + '">'
       + (isUser ? '👤' : '✦') + '</div>'
       + '<div style="flex:1;max-width:calc(100% - 44px);">'
-      + '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px;' + (isUser ? 'text-align:right;' : '') + '">' + (isUser ? 'You' : 'Claude') + '</div>'
+      + '<div style="font-size:11px;color:var(--text-light);margin-bottom:4px;' + (isUser ? 'text-align:right;' : '') + '">' + (isUser ? 'You' : 'AI Assistant') + '</div>'
       + '<div id="' + msgId + '" style="background:' + (isUser ? 'var(--accent)' : 'var(--bg)') + ';color:' + (isUser ? '#fff' : 'var(--text)') + ';padding:10px 14px;border-radius:' + (isUser ? '14px 14px 4px 14px' : '14px 14px 14px 4px') + ';font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;">'
       + AI._formatResponse(msg.content) + '</div>'
       + copyBtn
@@ -304,6 +304,17 @@ var AI = {
     var text = input.value.trim();
     if (!text || AI._loading) return;
 
+    // Find + visually disable the send button
+    var sendBtn = document.querySelector('button[onclick*="AI.send"]');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = '0.5';
+      sendBtn.style.cursor = 'not-allowed';
+      sendBtn._origHTML = sendBtn.innerHTML;
+      sendBtn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span>';
+    }
+    input.disabled = true;
+
     // Add user message
     AI._messages.push({ role: 'user', content: text });
     input.value = '';
@@ -311,22 +322,30 @@ var AI = {
     AI._refreshMessages();
     AI._scrollToBottom();
 
-    // Build context about the business
     var context = AI._buildContext();
-
     AI._loading = true;
     AI._showTyping();
 
-    // Call Claude API
-    AI._callClaude(context, text).then(function(response) {
+    var restoreBtn = function() {
       AI._loading = false;
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '';
+        sendBtn.style.cursor = '';
+        if (sendBtn._origHTML) sendBtn.innerHTML = sendBtn._origHTML;
+      }
+      if (input) input.disabled = false;
+    };
+
+    AI._callClaude(context, text).then(function(response) {
+      restoreBtn();
       AI._removeTyping();
       AI._messages.push({ role: 'assistant', content: response });
       AI._saveHistory();
       AI._refreshMessages();
       AI._scrollToBottom();
     }).catch(function(err) {
-      AI._loading = false;
+      restoreBtn();
       AI._removeTyping();
       AI._messages.push({ role: 'assistant', content: '❌ Error: ' + (err.message || 'Could not connect to Claude. Check your API key.') });
       AI._refreshMessages();
@@ -362,9 +381,9 @@ var AI = {
     var thisYear = new Date().getFullYear();
     var ytdRevenue = invoices.filter(function(i){return i.status==='paid' && new Date(i.paidDate||i.createdAt).getFullYear()===thisYear;}).reduce(function(s,i){return s+(i.total||0);},0);
 
-    var coName = localStorage.getItem('bm-co-name') || 'Second Nature Tree Service';
-    var coPhone = localStorage.getItem('bm-co-phone') || '(914) 391-5233';
-    var coEmail = localStorage.getItem('bm-co-email') || 'info@peekskilltree.com';
+    var coName = localStorage.getItem('bm-co-name') || BM_CONFIG.companyName;
+    var coPhone = localStorage.getItem('bm-co-phone') || BM_CONFIG.phone;
+    var coEmail = localStorage.getItem('bm-co-email') || BM_CONFIG.email;
     return 'You are Claude, an AI assistant built into Branch Manager — a field service management app for ' + coName + ' in Peekskill, NY.\n\n'
       + 'BUSINESS CONTEXT:\n'
       + '• Company: ' + coName + '\n'
@@ -403,19 +422,15 @@ var AI = {
         apiMessages.push({ role: m.role, content: m.content });
       });
 
-      fetch('https://api.anthropic.com/v1/messages', {
+      fetch('https://ltpivkqahvplapyagljt.supabase.co/functions/v1/ai-chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': AI._apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-5-20250514',
           max_tokens: 1024,
           system: systemPrompt,
-          messages: apiMessages
+          messages: apiMessages,
+          apiKey: AI._apiKey
         })
       })
       .then(function(res) {
@@ -488,7 +503,7 @@ var AI = {
     if (!key) { UI.toast('Enter your API key', 'error'); return; }
     localStorage.setItem('bm-claude-key', key);
     AI._apiKey = key;
-    UI.toast('Claude AI connected!');
+    UI.toast('AI Assistant connected!');
     // Refresh panel
     var panel = document.getElementById('ai-panel');
     if (panel) panel.innerHTML = AI._renderPanel();

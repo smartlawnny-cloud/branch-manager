@@ -17,10 +17,10 @@ var PipelinePage = {
 
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
@@ -28,7 +28,7 @@ var PipelinePage = {
     var allDeals = PipelinePage.getDeals();
     var sixMonthsAgo = new Date(Date.now() - 180 * 86400000);
 
-    // Filter: when recent mode, hide old assessment/quote_sent deals (Jobber import noise)
+    // Filter: when recent mode, hide old assessment/quote_sent deals (import noise)
     var deals = PipelinePage._filterRecent
       ? allDeals.filter(function(d) {
           if (d.stage === 'won' || d.stage === 'lost' || d.stage === 'new_lead' || d.stage === 'follow_up') return true;
@@ -130,7 +130,7 @@ var PipelinePage = {
     html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'
       + '<button class="btn ' + (PipelinePage._filterRecent ? 'btn-primary' : 'btn-outline') + '" style="font-size:12px;padding:5px 14px;" onclick="PipelinePage._filterRecent=true;loadPage(\'pipeline\')">6 Months</button>'
       + '<button class="btn ' + (!PipelinePage._filterRecent ? 'btn-primary' : 'btn-outline') + '" style="font-size:12px;padding:5px 14px;" onclick="PipelinePage._filterRecent=false;loadPage(\'pipeline\')">All Time</button>'
-      + (hiddenOld > 0 ? '<span style="font-size:12px;color:var(--text-light);">' + hiddenOld + ' older Jobber deals hidden</span>' : '')
+      + (hiddenOld > 0 ? '<span style="font-size:12px;color:var(--text-light);">' + hiddenOld + ' older deals hidden</span>' : '')
       + '<div style="margin-left:auto;display:flex;gap:8px;">'
       + (openQuotes.length > 0 ? '<button class="btn btn-outline" style="font-size:12px;padding:5px 14px;" onclick="PipelinePage.importFromQuotes()">📋 Import ' + openQuotes.length + ' Quote' + (openQuotes.length !== 1 ? 's' : '') + '</button>' : '')
       + '<button class="btn btn-primary" style="font-size:12px;padding:5px 14px;" onclick="PipelinePage.addDeal(\'new_lead\')">+ New Deal</button>'
@@ -184,14 +184,14 @@ var PipelinePage = {
           // Quick-action buttons
           if (stage.id !== 'won' && stage.id !== 'lost') {
             html += '<div style="display:flex;gap:5px;margin-top:8px;" onclick="event.stopPropagation()">'
-              + '<button style="flex:1;padding:4px 0;font-size:11px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:5px;cursor:pointer;font-weight:600;" onclick="PipelinePage.quickMove(\'' + deal.id + '\',\'won\')">Won ✓</button>'
-              + '<button style="flex:1;padding:4px 0;font-size:11px;background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;border-radius:5px;cursor:pointer;font-weight:600;" onclick="PipelinePage.quickMove(\'' + deal.id + '\',\'lost\')">Lost ✗</button>'
+              + '<button style="flex:1;padding:10px 0;font-size:12px;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:6px;cursor:pointer;font-weight:600;min-height:38px;" onclick="PipelinePage.quickMove(\'' + deal.id + '\',\'won\')">Won ✓</button>'
+              + '<button style="flex:1;padding:10px 0;font-size:12px;background:#fce4ec;color:#c62828;border:1px solid #ef9a9a;border-radius:6px;cursor:pointer;font-weight:600;min-height:38px;" onclick="PipelinePage.quickMove(\'' + deal.id + '\',\'lost\')">Lost ✗</button>'
               + '</div>';
           } else if (stage.id === 'won') {
             html += '<div style="display:flex;gap:5px;margin-top:8px;" onclick="event.stopPropagation()">'
               + (deal.jobId
                 ? '<div style="flex:1;padding:4px 0;font-size:11px;text-align:center;color:var(--text-light);font-style:italic;">Job created</div>'
-                : '<button style="width:100%;padding:4px 0;font-size:11px;background:#1565c0;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600;" onclick="PipelinePage.convertToJob(\'' + deal.id + '\')">🔨 Convert to Job</button>')
+                : '<button style="width:100%;padding:10px 0;font-size:12px;background:#1565c0;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;min-height:38px;" onclick="PipelinePage.convertToJob(\'' + deal.id + '\')">🔨 Convert to Job</button>')
               + '</div>';
           }
 
@@ -410,7 +410,8 @@ var PipelinePage = {
     var cleanPhone = clientPhone.replace(/\D/g, '');
     var firstName = (deal.clientName || '').split(' ')[0];
 
-    var html = '<div style="margin-bottom:16px;">'
+    var html = '<div style="margin-bottom:12px;"><button onclick="loadPage(\'pipeline\')" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;color:var(--accent);cursor:pointer;">← Back to Pipeline</button></div>'
+      + '<div style="margin-bottom:16px;">'
       + '<h2 style="margin-bottom:4px;">' + deal.clientName + '</h2>'
       + '<div style="color:var(--text-light);">' + (deal.description || '') + '</div>'
       + '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'

@@ -6,13 +6,13 @@
 var PDFGen = {
   get COMPANY() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
       address: localStorage.getItem('bm-co-address') || '1 Highland Industrial Park, Peekskill, NY 10566',
       licenseWC: (localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644').split(',')[0].trim(),
       licensePutnam: (localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644').split(',')[1] ? (localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644').split(',')[1].trim() : 'PC-50644',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com',
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website,
       color: '#2e7d32'
     };
   },
@@ -87,8 +87,31 @@ var PDFGen = {
       body += '</div>';
     }
 
-    // Deposit notice for larger jobs
-    if (total > 1000) {
+    // Time & Material estimate (internal reference — not shown on client PDF by default)
+    if (q.timeMaterial && q.timeMaterial.totalHrs) {
+      var tm = q.timeMaterial;
+      body += '<div style="margin:20px 0;border:2px solid #e5e7eb;border-radius:10px;overflow:hidden;">'
+        + '<div style="background:#f0f4ff;padding:10px 16px;font-weight:700;font-size:14px;border-bottom:2px solid #e5e7eb;">Production Estimate</div>'
+        + '<div style="padding:14px 16px;font-size:13px;">'
+        + '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Climber: ' + (tm.climberHrs || 0) + ' hrs</span>'
+        + '<span>Ground crew (' + (tm.groundCount || 0) + '): ' + (tm.groundHrs || 0) + ' hrs</span></div>'
+        + '<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>Total job hours: ' + tm.totalHrs + '</span>'
+        + (tm.disposal ? '<span>Disposal: ' + PDFGen._money(tm.disposal) + '</span>' : '') + '</div>'
+        + '<div style="padding:3px 0;">Equipment: '
+        + (tm.bucket ? 'Bucket truck ' : '') + (tm.chipper ? 'Chipper ' : '') + (tm.crane ? 'Crane ' : '') + (tm.stumpGrinder ? 'Stump grinder ' : '')
+        + (!tm.bucket && !tm.chipper && !tm.crane && !tm.stumpGrinder ? 'None' : '')
+        + '</div>'
+        + (tm.tmTotal ? '<div style="padding:6px 0;border-top:1px solid #e5e7eb;font-weight:700;text-align:right;">T&M Price: ' + PDFGen._money(tm.tmTotal) + '</div>' : '')
+        + '</div></div>';
+    }
+
+    // Deposit notice
+    if (q.depositRequired && q.depositDue > 0) {
+      body += '<div class="deposit-notice">'
+        + '<h4>Deposit Required</h4>'
+        + '<p>A deposit of <strong>' + PDFGen._money(q.depositDue) + '</strong> is required to schedule this work.</p>'
+        + '</div>';
+    } else if (total > 1000) {
       var deposit = Math.round(total * 0.5);
       body += '<div class="deposit-notice">'
         + '<h4>Deposit Required</h4>'
@@ -105,18 +128,24 @@ var PDFGen = {
         + '</div>';
     }
 
-    // Terms & conditions
+    // Terms & conditions (comprehensive tree service terms)
     body += '<div class="terms-section">'
       + '<h4>Terms &amp; Conditions</h4>'
       + '<ul>'
-      + '<li>This quote is valid for 30 days from the date above.</li>'
-      + '<li>Payment is due upon completion unless otherwise arranged.</li>'
-      + '<li>All work performed by licensed and insured professionals.</li>'
-      + '<li>Client is responsible for ensuring site access and identifying underground utilities.</li>'
-      + '<li>Cleanup of debris is included. Stump grinding quoted separately if applicable.</li>'
-      + '<li>Additional work beyond this scope will be quoted separately.</li>'
-      + '<li>' + PDFGen.COMPANY.name + ' is not responsible for pre-existing conditions, including but not limited to dead limbs, disease, or structural defects not visible at time of estimate.</li>'
+      + '<li><strong>Validity:</strong> This quote is valid for 30 days from the date above. Pricing may change after expiration.</li>'
+      + '<li><strong>Payment:</strong> A 50% deposit is required to schedule work unless otherwise noted. Remaining balance is due upon completion. Invoices unpaid after 30 days are subject to a 1.5% monthly late fee.</li>'
+      + '<li><strong>Scheduling:</strong> Work will be scheduled within 2-4 weeks of deposit receipt, weather permitting. ' + PDFGen.COMPANY.name + ' will provide 24-48 hours advance notice.</li>'
+      + '<li><strong>Access:</strong> Client will provide clear access to the work area for trucks and equipment. Client will move vehicles, outdoor furniture, and fragile items from the work zone. If access is blocked on the scheduled date, a trip charge may apply.</li>'
+      + '<li><strong>Scope:</strong> This quote covers only the work described above. Additional work will be quoted separately and requires written approval before proceeding.</li>'
+      + '<li><strong>Cleanup:</strong> All debris from the contracted work will be removed. Wood may be left on-site if requested.</li>'
+      + '<li><strong>Stump Grinding:</strong> If included, stumps are ground 6-8 inches below grade. Grindings fill the hole unless removal is specified. Contractor is not responsible for underground utilities, irrigation, or septic unless disclosed in advance.</li>'
+      + '<li><strong>Insurance:</strong> ' + PDFGen.COMPANY.name + ' carries General Liability and Workers\' Compensation insurance. Certificates available upon request.</li>'
+      + '<li><strong>Liability:</strong> ' + PDFGen.COMPANY.name + ' is not responsible for pre-existing conditions (dead limbs, disease, structural defects not visible at time of estimate), underground utilities not disclosed by client, or damage caused by weather events. Total liability shall not exceed the contract amount.</li>'
+      + '<li><strong>Permits:</strong> Client is responsible for obtaining any required tree removal permits. Contractor can assist with permit applications if needed.</li>'
+      + '<li><strong>Cancellation:</strong> Cancel with 48 hours notice for full deposit refund. Cancellations within 48 hours: deposit is forfeited. If work has begun, client owes for work completed to date.</li>'
+      + '<li><strong>Warranty:</strong> Workmanship warranted for 30 days. Does not cover natural events (storms, disease, pest damage).</li>'
       + '</ul>'
+      + '<p style="font-size:10px;color:#666;margin-top:8px;">' + PDFGen.COMPANY.name + ' · ' + PDFGen.COMPANY.address + ' · ' + PDFGen.COMPANY.phone + ' · Licensed &amp; Fully Insured · ' + PDFGen.COMPANY.licenses + '</p>'
       + '</div>';
 
     // Signature block
@@ -1034,3 +1063,7 @@ var PDFGen = {
   // Alias for backwards compatibility
   generateJobSheet: function(jobId) { return PDFGen.generateJobSummary(jobId); }
 };
+
+// Route all PDF.* onclick calls (invoices/quotes/jobs/workflow) to the newer PDFGen module
+// (overrides the older var PDF from src/pdf.js which loads before this file).
+window.PDF = PDFGen;

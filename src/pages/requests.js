@@ -5,10 +5,10 @@
 var RequestsPage = {
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
@@ -30,7 +30,7 @@ var RequestsPage = {
   // ── Background Supabase sync ──────────────────────────────────────────────
   _autoSync: function() {
     var SUPABASE_URL = 'https://ltpivkqahvplapyagljt.supabase.co';
-    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI';
+    var SUPABASE_KEY = (typeof SupabaseDB !== 'undefined' && SupabaseDB.ANON_KEY) || '';
     fetch(SUPABASE_URL + '/rest/v1/requests?select=*&order=created_at.desc&limit=50', {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
     })
@@ -71,7 +71,7 @@ var RequestsPage = {
 
   syncFromSupabase: function() {
     var SUPABASE_URL = 'https://ltpivkqahvplapyagljt.supabase.co';
-    var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI';
+    var SUPABASE_KEY = (typeof SupabaseDB !== 'undefined' && SupabaseDB.ANON_KEY) || '';
     var btn = document.getElementById('req-sync-btn');
     if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; }
     fetch(SUPABASE_URL + '/rest/v1/requests?select=*&order=created_at.desc&limit=50', {
@@ -114,114 +114,187 @@ var RequestsPage = {
     });
   },
 
+  _pendingDetail: null,
+
   // ── List render ───────────────────────────────────────────────────────────
   render: function() {
+    if (RequestsPage._pendingDetail) {
+      var _pid = RequestsPage._pendingDetail;
+      RequestsPage._pendingDetail = null;
+      setTimeout(function() { RequestsPage.showDetail(_pid); }, 50);
+    }
     var lastSync = localStorage.getItem('bm-req-last-sync');
     var fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     if (!lastSync || lastSync < fiveMinAgo) RequestsPage._autoSync();
 
     var self = RequestsPage;
-    var all = DB.requests.getAll();
+    var allRequests = DB.requests.getAll();
 
-    // Stats
-    var newCount   = all.filter(function(r){ return r.status === 'new'; }).length;
-    var assessed   = all.filter(function(r){ return r.status === 'assessment_complete'; }).length;
-    var overdue    = all.filter(function(r){ return self._isOverdue(r); }).length;
-    var converted  = all.filter(function(r){ return r.status === 'converted' || r.status === 'quoted'; }).length;
-    var convRate   = all.length > 0 ? Math.round(converted / all.length * 100) : 0;
-    var recentNew  = all.filter(function(r) {
-      var ago = new Date(); ago.setDate(ago.getDate()-30);
-      return new Date(r.createdAt) >= ago && r.status === 'new';
+    // ── Auto-link unlinked requests to existing clients ──
+    var allClients = DB.clients.getAll();
+    allRequests.forEach(function(r) {
+      if (r.clientId) return;
+      var match = null;
+      if (r.phone) {
+        var ph = r.phone.replace(/\D/g,'');
+        if (ph.length >= 7) match = allClients.find(function(c) { return c.phone && c.phone.replace(/\D/g,'') === ph; });
+      }
+      if (!match && r.email) {
+        var em = r.email.toLowerCase();
+        match = allClients.find(function(c) { return c.email && c.email.toLowerCase() === em; });
+      }
+      if (!match && r.clientName) {
+        var nm = r.clientName.toLowerCase().trim();
+        match = allClients.find(function(c) { return c.name && c.name.toLowerCase().trim() === nm; });
+      }
+      if (match) {
+        DB.requests.update(r.id, { clientId: match.id });
+        r.clientId = match.id;
+      }
     });
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
-      // Overview
-      + '<div onclick="RequestsPage._setFilter(\'all\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
-      + '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Overview</div>'
-      + '<div style="font-size:12px;"><span style="color:#1565c0;">●</span> New (' + newCount + ')</div>'
-      + '<div style="font-size:12px;"><span style="color:#2e7d32;">●</span> Assessment complete (' + assessed + ')</div>'
-      + '<div style="font-size:12px;"><span style="color:#dc3545;">●</span> Overdue (' + overdue + ')</div>'
-      + '<div style="font-size:12px;"><span style="color:#6c757d;">●</span> Converted (' + converted + ')</div>'
-      + '</div>'
-      // New requests
-      + '<div onclick="RequestsPage._setFilter(\'new\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
-      + '<div style="font-size:14px;font-weight:700;">New requests</div>'
-      + '<div style="font-size:12px;color:var(--text-light);">Past 30 days</div>'
-      + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + recentNew.length + '</div>'
-      + '</div>'
-      // Conversion rate
-      + '<div style="padding:14px 16px;border-right:1px solid var(--border);">'
-      + '<div style="font-size:14px;font-weight:700;">Conversion rate</div>'
-      + '<div style="font-size:12px;color:var(--text-light);">Requests → quotes</div>'
-      + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + convRate + '%</div>'
-      + '</div>'
-      // Total
-      + '<div style="padding:14px 16px;">'
-      + '<div style="font-size:14px;font-weight:700;">Total requests</div>'
-      + '<div style="font-size:28px;font-weight:700;margin-top:12px;">' + all.length + '</div>'
-      + '<div style="font-size:12px;color:var(--text-light);">All time</div>'
-      + '</div>'
-      + '</div>';
-
-    var filtered = self._getFiltered();
-
-    // Header + chips + search
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-      + '<h3 style="font-size:16px;font-weight:700;margin:0;">All requests</h3>'
-      + '<span style="font-size:13px;color:var(--text-light);">(' + filtered.length + ')</span>';
-
-    var chips = [['all','All'],['new','New'],['assessment_complete','Assessment Complete'],['overdue','Overdue'],['unscheduled','Unscheduled'],['converted','Converted']];
-    chips.forEach(function(c) {
-      var isActive = self._filter === c[0];
-      html += '<button onclick="RequestsPage._setFilter(\'' + c[0] + '\')" style="font-size:12px;padding:5px 14px;border-radius:20px;border:1px solid '
-        + (isActive ? '#1565c0' : 'var(--border)') + ';background:' + (isActive ? '#1565c0' : 'var(--white)')
-        + ';color:' + (isActive ? '#fff' : 'var(--text)') + ';cursor:pointer;font-weight:' + (isActive ? '600' : '500') + ';">' + c[1] + '</button>';
+    // ── Counts ──
+    var newCount   = allRequests.filter(function(r){ return r.status === 'new'; }).length;
+    var quotedCount = allRequests.filter(function(r){ return r.status === 'quoted'; }).length;
+    var overdueCount = allRequests.filter(function(r){ return self._isOverdue(r); }).length;
+    var convertedCount = allRequests.filter(function(r){ return r.status === 'converted' || r.status === 'quoted'; }).length;
+    var thirtyAgo = new Date(); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+    var recentNew = allRequests.filter(function(r) {
+      return new Date(r.createdAt) >= thirtyAgo;
     });
+    var recentNewCount = recentNew.filter(function(r){ return r.status === 'new'; }).length;
+    var recentConverted = recentNew.filter(function(r){ return r.status === 'converted' || r.status === 'quoted'; }).length;
+    var convRate = recentNew.length > 0 ? Math.round(recentConverted / recentNew.length * 100) : 0;
 
-    html += '</div>'
-      + '<div style="display:flex;gap:8px;align-items:center;">'
-      + '<div class="search-box" style="min-width:180px;max-width:260px;">'
-      + '<span style="color:var(--text-light);">🔍</span>'
-      + '<input type="text" placeholder="Search requests..." value="' + UI.esc(self._search) + '" oninput="RequestsPage._search=this.value;loadPage(\'requests\')">'
-      + '</div>'
-      + '<button class="btn btn-primary" onclick="RequestsPage.showForm()" style="font-size:12px;white-space:nowrap;">+ New Request</button>'
+    // ── New request alert cards at top ──
+    var newRequests = allRequests.filter(function(r){ return r.status === 'new'; });
+    newRequests.sort(function(a,b){ return new Date(b.createdAt||0) - new Date(a.createdAt||0); });
+
+    var html = '';
+
+    // New request cards
+    if (newRequests.length > 0) {
+      html += '<div style="margin-bottom:20px;">';
+      newRequests.forEach(function(r) {
+        var ageMs = Date.now() - new Date(r.createdAt || 0).getTime();
+        var ageHrs = Math.floor(ageMs / 3600000);
+        var ageStr = ageHrs < 1 ? 'just now' : ageHrs < 24 ? ageHrs + ' hour' + (ageHrs !== 1 ? 's' : '') + ' ago' : Math.floor(ageHrs / 24) + ' day' + (Math.floor(ageHrs / 24) !== 1 ? 's' : '') + ' ago';
+
+        html += '<div onclick="RequestsPage.showDetail(\'' + r.id + '\')" style="'
+          + 'background:#fffde7;border:1px solid #ffe082;border-left:4px solid #f9a825;'
+          + 'border-radius:10px;padding:14px 18px;margin-bottom:8px;cursor:pointer;'
+          + 'transition:transform .1s, box-shadow .1s;'
+          + '" onmouseenter="this.style.boxShadow=\'0 2px 8px rgba(249,168,37,.25)\'" onmouseleave="this.style.boxShadow=\'none\'">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+          + '<div style="flex:1;min-width:200px;">'
+          + '<div style="font-size:11px;font-weight:700;color:#e65100;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">New Request'
+          + (r.clientId ? ' <span style="color:var(--green-dark);font-size:10px;background:#e8f5e9;padding:1px 6px;border-radius:4px;margin-left:6px;text-transform:none;letter-spacing:0;">Returning Client</span>' : '')
+          + '</div>'
+          + '<div style="font-size:15px;font-weight:700;color:var(--text);">' + UI.esc(r.clientName || 'Unknown')
+          + '<span style="font-weight:400;color:var(--text-light);font-size:13px;margin-left:8px;">'
+          + (r.property ? ' — ' + UI.esc(r.property) : '')
+          + ' — Received ' + ageStr
+          + '</span></div>'
+          + '</div>'
+          + '<button onclick="event.stopPropagation();RequestsPage._createQuote(\'' + r.id + '\',\'' + (r.clientId||'') + '\',\'' + UI.esc(r.clientName||'').replace(/'/g,"\\'") + '\')" '
+          + 'style="font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;border:1px solid #e65100;background:#fff3e0;color:#e65100;cursor:pointer;white-space:nowrap;">'
+          + 'Create Quote &rarr;</button>'
+          + '</div></div>';
+      });
+      html += '</div>';
+    }
+
+    // ── Stats row (3 cards like Jobber) ──
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;" class="detail-grid">';
+
+    // Card 1: Overview
+    html += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Overview</div>'
+      + '<div style="display:flex;gap:16px;flex-wrap:wrap;">'
+      + '<div><div style="font-size:22px;font-weight:800;color:#1565c0;">' + newCount + '</div><div style="font-size:11px;color:var(--text-light);">New</div></div>'
+      + '<div><div style="font-size:22px;font-weight:800;color:#7b1fa2;">' + quotedCount + '</div><div style="font-size:11px;color:var(--text-light);">Quoted</div></div>'
+      + '<div><div style="font-size:22px;font-weight:800;color:' + (overdueCount > 0 ? '#c62828' : 'var(--text)') + ';">' + overdueCount + '</div><div style="font-size:11px;color:var(--text-light);">Overdue</div></div>'
       + '</div></div>';
 
-    html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'
-      + '<table class="data-table"><thead><tr>'
-      + '<th>Client</th><th>Title</th><th>Property</th><th>Contact</th><th>Requested</th><th>Status</th>'
-      + '</tr></thead><tbody>';
+    // Card 2: New Requests (30 days)
+    html += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">New Requests</div>'
+      + '<div style="font-size:28px;font-weight:800;color:var(--text);">' + recentNewCount + '</div>'
+      + '<div style="font-size:11px;color:var(--text-light);">Past 30 days</div>'
+      + '</div>';
+
+    // Card 3: Conversion Rate (30 days)
+    html += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Conversion Rate</div>'
+      + '<div style="font-size:28px;font-weight:800;color:' + (convRate >= 50 ? '#2e7d32' : convRate >= 25 ? '#e07c24' : '#c62828') + ';">' + convRate + '%</div>'
+      + '<div style="font-size:11px;color:var(--text-light);">Past 30 days</div>'
+      + '</div>';
+
+    html += '</div>';
+
+    // ── Filter chips + search ──
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">';
+
+    // Filter chips
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    var filters = [['all','All'],['new','New'],['quoted','Quoted'],['converted','Converted'],['archived','Archived']];
+    filters.forEach(function(f) {
+      var isActive = self._filter === f[0];
+      html += '<button onclick="RequestsPage._setFilter(\'' + f[0] + '\')" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid '
+        + (isActive ? '#1565c0' : 'var(--border)') + ';background:' + (isActive ? '#1565c0' : 'var(--white)') + ';color:'
+        + (isActive ? '#fff' : 'var(--text)') + ';cursor:pointer;font-weight:' + (isActive ? '700' : '500') + ';">' + f[1] + '</button>';
+    });
+    html += '</div>';
+
+    // Search input
+    html += '<div style="position:relative;">'
+      + '<input type="text" placeholder="Search requests..." value="' + UI.esc(self._search) + '" '
+      + 'oninput="RequestsPage._search=this.value;loadPage(\'requests\')" '
+      + 'style="font-size:13px;padding:7px 12px 7px 32px;border:1px solid var(--border);border-radius:8px;width:220px;background:var(--white);">'
+      + '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-light);">&#128269;</span>'
+      + '</div>';
+
+    html += '</div>';
+
+    // ── Table ──
+    var filtered = self._getFiltered();
 
     if (filtered.length === 0) {
-      html += '<tr><td colspan="6">'
-        + (self._search
-          ? '<div style="text-align:center;padding:24px;color:var(--text-light);">No requests match "' + UI.esc(self._search) + '"</div>'
-          : UI.emptyState('📥', 'No requests yet', 'New requests from your website form will appear here.', '+ New Request', 'RequestsPage.showForm()'))
-        + '</td></tr>';
+      html += UI.emptyState('&#128229;', 'No requests found', self._search ? 'Try a different search term.' : 'New requests from your website form will appear here.');
     } else {
-      filtered.forEach(function(r) {
-        var isOld = self._isOverdue(r);
-        var rowBg = isOld ? 'background:#fff8f8;' : '';
-        var title = r.service || (r.notes ? r.notes.split('\n')[0].substring(0, 50) + (r.notes.length > 50 ? '…' : '') : 'Request for ' + (r.clientName || ''));
+      html += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;">';
 
-        html += '<tr onclick="RequestsPage.showDetail(\'' + r.id + '\')" style="cursor:pointer;' + rowBg + '">'
-          + '<td><strong>' + UI.esc(r.clientName || '—') + '</strong></td>'
-          + '<td style="font-size:13px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.esc(title) + '</td>'
-          + '<td style="font-size:12px;color:var(--text-light);max-width:180px;">' + (r.property ? UI.esc(r.property) : '—') + '</td>'
-          + '<td style="font-size:13px;">'
-          + (r.phone ? '<a href="tel:' + r.phone.replace(/\D/g,'') + '" onclick="event.stopPropagation()" style="color:var(--text);text-decoration:none;">' + UI.phone(r.phone) + '</a>' : '—')
-          + (r.email ? '<div style="font-size:11px;color:var(--text-light);">' + r.email + '</div>' : '')
-          + '</td>'
-          + '<td style="white-space:nowrap;font-size:13px;">'
-          + UI.dateRelative(r.createdAt)
-          + (isOld ? ' <span style="font-size:10px;font-weight:700;background:#fdecea;color:#c62828;padding:1px 5px;border-radius:3px;">OVERDUE</span>' : '')
-          + '</td>'
-          + '<td>' + UI.statusBadge(r.status) + '</td>'
+      // Table header
+      html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        + '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--border);">'
+        + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em;">Client</th>'
+        + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em;">Description</th>'
+        + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em;">Property</th>'
+        + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em;">Requested</th>'
+        + '<th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.04em;">Status</th>'
+        + '</tr></thead><tbody>';
+
+      filtered.forEach(function(r) {
+        var isOverdue = self._isOverdue(r);
+        var displayStatus = isOverdue && r.status === 'new' ? 'overdue' : r.status;
+        var desc = r.service || r.notes || '';
+        if (desc.length > 50) desc = desc.substring(0, 50) + '...';
+        var prop = r.property || '';
+        if (prop.length > 35) prop = prop.substring(0, 35) + '...';
+
+        html += '<tr onclick="RequestsPage.showDetail(\'' + r.id + '\')" style="cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;" '
+          + 'onmouseenter="this.style.background=\'var(--bg)\'" onmouseleave="this.style.background=\'transparent\'">'
+          + '<td style="padding:12px 14px;font-weight:600;">' + UI.esc(r.clientName || 'Unknown') + '</td>'
+          + '<td style="padding:12px 14px;color:var(--text-light);">' + UI.esc(desc || '—') + '</td>'
+          + '<td style="padding:12px 14px;color:var(--text-light);font-size:12px;">' + UI.esc(prop || '—') + '</td>'
+          + '<td style="padding:12px 14px;white-space:nowrap;">' + UI.dateShort(r.createdAt) + '</td>'
+          + '<td style="padding:12px 14px;">' + UI.statusBadge(displayStatus) + '</td>'
           + '</tr>';
       });
+
+      html += '</tbody></table></div>';
     }
-    html += '</tbody></table></div>';
+
     return html;
   },
 
@@ -229,7 +302,10 @@ var RequestsPage = {
   _getFiltered: function() {
     var self = RequestsPage;
     var all = DB.requests.getAll();
-    if (self._filter === 'converted') {
+    // Default: hide converted and archived (they're done — show in Clients page)
+    if (self._filter === 'all') {
+      all = all.filter(function(r) { return r.status !== 'converted' && r.status !== 'quoted' && r.status !== 'archived'; });
+    } else if (self._filter === 'converted') {
       all = all.filter(function(r) { return r.status === 'converted' || r.status === 'quoted'; });
     } else if (self._filter === 'overdue') {
       all = all.filter(function(r) { return self._isOverdue(r); });
@@ -372,9 +448,6 @@ var RequestsPage = {
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
       + '<button class="btn btn-outline" onclick="loadPage(\'requests\')" style="padding:6px 12px;font-size:12px;">← Back to Requests</button>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-      + (r.phone ? '<a href="tel:' + r.phone.replace(/\D/g,'') + '" class="btn btn-outline" style="font-size:12px;">📞 Call</a>' : '')
-      + (r.email ? '<button class="btn btn-outline" onclick="RequestsPage._sendConfirmation(\'' + r.id + '\')" style="font-size:12px;">📧 Email</button>' : '')
-      + '<button class="btn btn-outline" onclick="RequestsPage.showForm(\'' + r.id + '\')" style="font-size:12px;">✏️ Edit</button>'
       + '<button class="btn btn-primary" onclick="RequestsPage._createQuote(\'' + r.id + '\',\'' + (r.clientId||'') + '\',\'' + UI.esc(r.clientName||'') + '\')" style="font-size:12px;">📝 Create Quote</button>'
       + '</div></div>'
 
@@ -384,7 +457,10 @@ var RequestsPage = {
       + '<div style="padding:20px 24px;">'
       + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">'
       + '<div>'
-      + '<h2 style="font-size:22px;font-weight:700;margin:0 0 4px;">' + UI.esc(r.clientName || 'Unknown') + '</h2>'
+      + '<h2 style="font-size:22px;font-weight:700;margin:0 0 4px;">'
+      + UI.esc(r.clientName || 'Unknown')
+      + (r.clientId ? ' <a onclick="ClientsPage.showDetail(\'' + r.clientId + '\')" style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:500;margin-left:6px;">Edit Client →</a>' : '')
+      + '</h2>'
       + '<div style="font-size:13px;color:var(--text-light);">'
       + UI.dateRelative(r.createdAt)
       + (r.source ? ' · via ' + r.source : '')
@@ -451,15 +527,56 @@ var RequestsPage = {
     // ── Right sidebar ──
       + '<div>'
 
-    // Contact card
+    // Auto-match client by phone/email/name
+    var matchedClient = null;
+    if (r.clientId) {
+      matchedClient = DB.clients.getById(r.clientId);
+    }
+    if (!matchedClient && r.phone) {
+      var ph = r.phone.replace(/\D/g,'');
+      matchedClient = DB.clients.getAll().find(function(c) { return c.phone && c.phone.replace(/\D/g,'') === ph; });
+    }
+    if (!matchedClient && r.email) {
+      var em = r.email.toLowerCase();
+      matchedClient = DB.clients.getAll().find(function(c) { return c.email && c.email.toLowerCase() === em; });
+    }
+    if (!matchedClient && r.clientName) {
+      matchedClient = DB.clients.getAll().find(function(c) { return c.name && c.name.toLowerCase() === r.clientName.toLowerCase(); });
+    }
+    // Auto-link if found but not linked
+    if (matchedClient && !r.clientId) {
+      DB.requests.update(r.id, { clientId: matchedClient.id });
+      r.clientId = matchedClient.id;
+    }
+
+    // Client history
+    var clientQuotes = matchedClient ? DB.quotes.getAll().filter(function(q) { return q.clientId === matchedClient.id; }) : [];
+    var clientJobs = matchedClient ? DB.jobs.getAll().filter(function(j) { return j.clientId === matchedClient.id; }) : [];
+    var clientInvoices = matchedClient ? DB.invoices.getAll().filter(function(i) { return i.clientId === matchedClient.id; }) : [];
+    var clientRevenue = clientInvoices.filter(function(i) { return i.status === 'paid'; }).reduce(function(s,i) { return s + (i.total||0); }, 0);
+
+    html
+    // Contact card with client history
       + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">'
-      + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">Contact</h4>'
-      + '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">' + UI.esc(r.clientName || '—') + '</div>'
-      + (r.property ? '<div style="font-size:12px;color:var(--text-light);margin-bottom:12px;">📍 ' + UI.esc(r.property) + '</div>' : '')
+      + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;">Client</h4>'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">' + UI.esc(r.clientName || '—')
+      + (matchedClient ? ' <span style="font-size:11px;color:var(--green-dark);font-weight:600;">● Existing</span>' : ' <span style="font-size:11px;color:#e07c24;font-weight:600;">● New Lead</span>')
+      + '</div>'
+      + (r.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(r.property) + '" target="_blank" style="display:block;font-size:13px;color:var(--accent);margin-bottom:8px;text-decoration:none;">📍 ' + UI.esc(r.property) + ' →</a>' : '')
       + (r.phone ? '<a href="tel:' + r.phone.replace(/\D/g,'') + '" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:13px;">📞 ' + UI.phone(r.phone) + '</a>' : '')
       + (r.phone ? '<button class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:13px;" onclick="if(typeof Dialpad!==\'undefined\'){Dialpad.showTextModal(\'' + r.phone.replace(/\D/g,'') + '\',\'Hi ' + UI.esc((r.clientName||'').split(' ')[0]||'there') + ', thanks for reaching out to \' + RequestsPage._co().name + \'! We received your request and will follow up shortly. Questions? Call \' + RequestsPage._co().phone + \'.\');}else{window.location=\'sms:' + r.phone.replace(/\D/g,'') + '\';}">💬 Text</button>' : '')
       + (r.email ? '<a href="mailto:' + r.email + '" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:13px;">✉️ ' + UI.esc(r.email) + '</a>' : '')
-      + (r.property ? '<a href="https://maps.google.com/?q=' + encodeURIComponent(r.property) + '" target="_blank" class="btn btn-outline" style="width:100%;justify-content:center;font-size:13px;">🗺 Directions</a>' : '')
+      + (r.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(r.property) + '" target="_blank" class="btn btn-outline" style="width:100%;justify-content:center;font-size:13px;">🗺 Directions</a>' : '')
+      + (matchedClient ? '<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">'
+        + '<div style="font-size:12px;color:var(--text-light);margin-bottom:6px;">CLIENT HISTORY</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;">'
+        + '<div style="background:var(--bg);padding:6px 8px;border-radius:6px;text-align:center;"><div style="font-weight:700;">' + clientQuotes.length + '</div><div style="font-size:11px;color:var(--text-light);">quotes</div></div>'
+        + '<div style="background:var(--bg);padding:6px 8px;border-radius:6px;text-align:center;"><div style="font-weight:700;">' + clientJobs.length + '</div><div style="font-size:11px;color:var(--text-light);">jobs</div></div>'
+        + '<div style="background:var(--bg);padding:6px 8px;border-radius:6px;text-align:center;"><div style="font-weight:700;">' + clientInvoices.length + '</div><div style="font-size:11px;color:var(--text-light);">invoices</div></div>'
+        + '<div style="background:var(--bg);padding:6px 8px;border-radius:6px;text-align:center;"><div style="font-weight:700;color:var(--green-dark);">' + UI.moneyInt(clientRevenue) + '</div><div style="font-size:11px;color:var(--text-light);">revenue</div></div>'
+        + '</div>'
+        + '<a onclick="ClientsPage.showDetail(\'' + matchedClient.id + '\')" style="display:block;text-align:center;font-size:12px;color:var(--accent);margin-top:8px;cursor:pointer;">View Full Client Profile →</a>'
+        + '</div>' : '')
       + '</div>'
 
     // Assessment date card
@@ -468,6 +585,13 @@ var RequestsPage = {
       + '<input type="date" id="req-assess-date" value="' + (r.assessmentDate || '') + '" style="width:100%;padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:8px;">'
       + '<button onclick="RequestsPage._saveAssessmentDate(\'' + r.id + '\')" class="btn btn-primary" style="width:100%;font-size:13px;">Save Date</button>'
       + '</div>'
+
+    // Assessment photos
+      + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">'
+      + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Assessment Photos</h4>';
+    if (typeof Photos !== 'undefined') { html += Photos.renderGallery('request', r.id); }
+    else { html += '<div style="color:var(--text-light);font-size:13px;">No photos yet</div>'; }
+    html += '</div>'
 
     // Quick info
       + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;">'
@@ -516,7 +640,8 @@ var RequestsPage = {
       var match = allClients.find(function(c) { return c.name === clientName; });
       if (match) resolvedId = match.id;
     }
-    QuotesPage.showForm(null, resolvedId);
+    // Pass requestId so the new quote is back-linked to its originating request
+    QuotesPage.showForm(null, resolvedId, requestId);
   },
 
   _sendConfirmation: function(id) {

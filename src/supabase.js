@@ -18,10 +18,13 @@
 var SupabaseDB = {
   client: null,
   ready: false,
+  _debug: false, // Set true for sync logging
 
   // Default credentials — auto-connect
   DEFAULT_URL: 'https://ltpivkqahvplapyagljt.supabase.co',
   DEFAULT_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI',
+  // Expose for other modules (centralized)
+  get ANON_KEY() { return this.DEFAULT_KEY; },
 
   init: function() {
     var url = localStorage.getItem('bm-supabase-url') || SupabaseDB.DEFAULT_URL;
@@ -46,7 +49,7 @@ var SupabaseDB = {
     try {
       SupabaseDB.client = window.supabase.createClient(url, key);
       SupabaseDB.ready = true;
-      console.log('Supabase connected:', url);
+      if (SupabaseDB._debug) console.log('Supabase connected:', url);
 
       // Check if RLS policies are properly configured
       SupabaseDB._checkRLS();
@@ -70,7 +73,7 @@ var SupabaseDB = {
         console.warn('Run migrate-rls.sql in your Supabase SQL Editor to fix this.');
         console.warn('See: https://supabase.com/dashboard/project/ltpivkqahvplapyagljt/sql');
       } else if (res.error && res.error.code === '42501') {
-        console.log('✅ Supabase RLS policies are active — anon key is restricted.');
+        if (SupabaseDB._debug) console.log('✅ Supabase RLS policies are active — anon key is restricted.');
       }
     }).catch(function() {});
   },
@@ -80,7 +83,7 @@ var SupabaseDB = {
     // CloudSync handles pulling data from Supabase into localStorage
     // CloudSync.wrapWrites() handles pushing writes to Supabase
     // This keeps the entire app working with synchronous DB calls
-    console.log('SupabaseDB: reads stay local (sync), writes push to cloud (async)');
+    if (SupabaseDB._debug) console.log('SupabaseDB: reads stay local (sync), writes push to cloud (async)');
   },
 
   _initialSync: async function() {
@@ -90,13 +93,13 @@ var SupabaseDB = {
     // Check if Supabase already has data
     var { count } = await sb.from('clients').select('*', { count: 'exact', head: true });
     if (count > 0) {
-      console.log('Supabase has ' + count + ' clients — pulling cloud data to local');
+      if (SupabaseDB._debug) console.log('Supabase has ' + count + ' clients — pulling cloud data to local');
       await SupabaseDB._pullFromCloud();
       return;
     }
 
     // No cloud data — push local data up
-    console.log('Syncing local data to Supabase...');
+    if (SupabaseDB._debug) console.log('Syncing local data to Supabase...');
     var tables = [
       { local: 'bm-clients', remote: 'clients' },
       { local: 'bm-requests', remote: 'requests' },
@@ -148,20 +151,23 @@ var SupabaseDB = {
           if (error) {
             console.warn('Sync error for ' + t.remote + ':', error.message);
           } else {
-            console.log('Synced ' + converted.length + ' rows to ' + t.remote);
+            if (SupabaseDB._debug) console.log('Synced ' + converted.length + ' rows to ' + t.remote);
           }
         }
       } catch (e) {
         console.warn('Sync failed for ' + t.remote + ':', e);
       }
     }
-    console.log('Initial sync complete');
+    if (SupabaseDB._debug) console.log('Initial sync complete');
     UI.toast('Data synced to cloud!');
     SupabaseDB.startPaymentPolling();
   },
 
   _pullFromCloud: async function() {
     if (!SupabaseDB.ready) return;
+    if (SupabaseDB._pulling) { console.log('[Pull] already in progress, skipping'); return; }
+    SupabaseDB._pulling = true;
+    window._bmSyncLock = true; // DB.js will check this before pushing
     var sb = SupabaseDB.client;
 
     var tables = [
@@ -193,9 +199,25 @@ var SupabaseDB = {
             });
             return newRow;
           });
-          localStorage.setItem(t.local, JSON.stringify(converted));
+
+          // MERGE with existing local — preserves unsynced local records
+          // Cloud wins for records with same id; local records not in cloud are kept
+          var existingLocal = [];
+          try { existingLocal = JSON.parse(localStorage.getItem(t.local) || '[]'); } catch(e) {}
+          var cloudIds = {};
+          converted.forEach(function(r) { cloudIds[r.id] = true; });
+          var localOnly = existingLocal.filter(function(r) {
+            // Keep local record if not in cloud AND created recently (< 5 min ago = probably unsynced)
+            if (cloudIds[r.id]) return false;
+            if (!r.createdAt) return false;
+            var ageMs = Date.now() - new Date(r.createdAt).getTime();
+            return ageMs < 5 * 60 * 1000; // 5 minute grace period
+          });
+          var merged = converted.concat(localOnly);
+          localStorage.setItem(t.local, JSON.stringify(merged));
           totalPulled += converted.length;
-          console.log('Pulled ' + converted.length + ' rows from ' + t.remote);
+          if (localOnly.length > 0) console.log('[Pull merge] kept ' + localOnly.length + ' unsynced local ' + t.remote);
+          if (SupabaseDB._debug) console.log('Pulled ' + converted.length + ' rows from ' + t.remote);
         }
       } catch (e) {
         console.warn('Pull failed for ' + t.remote + ':', e);
@@ -204,22 +226,20 @@ var SupabaseDB = {
 
     SupabaseDB.startPaymentPolling();
     if (totalPulled > 0) {
-      console.log('Cloud sync complete: ' + totalPulled + ' total records');
+      if (SupabaseDB._debug) console.log('Cloud sync complete: ' + totalPulled + ' total records');
       UI.toast(totalPulled + ' records synced from cloud');
       // Refresh current page to show data
       if (typeof loadPage === 'function') {
-        var currentPage = document.querySelector('.nav-item.active');
-        if (currentPage) {
-          var page = currentPage.getAttribute('onclick');
-          if (page) {
-            var match = page.match(/loadPage\('(\w+)'\)/);
-            if (match) loadPage(match[1]);
-          }
+        var activeNav = document.querySelector('.nav-item.active');
+        if (activeNav && activeNav.dataset.page) {
+          loadPage(activeNav.dataset.page);
         } else {
           loadPage('dashboard');
         }
       }
     }
+    SupabaseDB._pulling = false;
+    window._bmSyncLock = false;
   },
 
   // Poll for new requests submitted via book.html (every 3 min)
@@ -261,8 +281,8 @@ var SupabaseDB = {
       localStorage.setItem('bm-requests', JSON.stringify(localReqs));
 
       // Refresh requests page badge
-      if (typeof NotificationCenter !== 'undefined' && NotificationCenter.updateBadge) {
-        NotificationCenter.updateBadge();
+      if (typeof NotifCenter !== 'undefined' && NotifCenter.updateBadge) {
+        NotifCenter.updateBadge();
       }
     } catch(e) {}
   },
@@ -326,11 +346,11 @@ var SupabaseDB = {
           UI.toast('💳 Payment received! Invoice #' + p.invoice_number + ' — ' + amt + ' (Stripe)', 'success');
         });
         // Refresh page if on invoices
-        if (typeof loadPage === 'function' && document.querySelector('.nav-item.active')) {
+        if (typeof loadPage === 'function') {
           var active = document.querySelector('.nav-item.active');
-          var match = (active.getAttribute('onclick') || '').match(/loadPage\('(\w+)'\)/);
-          if (match && (match[1] === 'invoices' || match[1] === 'dashboard' || match[1] === 'payments')) {
-            loadPage(match[1]);
+          var pg = active && active.dataset.page;
+          if (pg && (pg === 'invoices' || pg === 'dashboard' || pg === 'payments')) {
+            loadPage(pg);
           }
         }
       }
@@ -340,8 +360,9 @@ var SupabaseDB = {
   },
 
   _uuid: function() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      var r = Math.random() * 16 | 0;
+      var r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15);
       return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     });
   },

@@ -13,9 +13,12 @@
 <link rel="preconnect" href="https://ltpivkqahvplapyagljt.supabase.co">
 <link rel="dns-prefetch" href="https://ltpivkqahvplapyagljt.supabase.co">
 <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js" defer></script>
+<script src="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.js" defer></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.1/dist/maplibre-gl.css">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
   :root {
     --green-dark: #00836c;
@@ -68,14 +71,40 @@
   [data-theme="dark"] .nav-item.active .li { stroke: #fff; }
   [data-theme="dark"] .sidebar-footer { color: rgba(255,255,255,.4); }
   [data-theme="dark"] .sidebar.collapsed .sidebar-footer #sidebar-toggle-btn { color: rgba(255,255,255,.5); }
+  /* Dark theme overrides for JS-generated content */
+  [data-theme="dark"] .content div[style*="background:#fff"],
+  [data-theme="dark"] .content div[style*="background: #fff"],
+  [data-theme="dark"] .content div[style*="background:white"],
+  [data-theme="dark"] .content div[style*="background:var(--white)"] { background:var(--white) !important; }
+  [data-theme="dark"] .content div[style*="color:#333"],
+  [data-theme="dark"] .content div[style*="color:#1a1a1a"],
+  [data-theme="dark"] .content span[style*="color:#333"] { color:var(--text) !important; }
+  [data-theme="dark"] .content div[style*="border:1px solid #e"],
+  [data-theme="dark"] .content div[style*="border:2px solid #e"],
+  [data-theme="dark"] .content div[style*="border:1px solid var(--border)"] { border-color:var(--border) !important; }
+  [data-theme="dark"] .content div[style*="background:var(--bg)"],
+  [data-theme="dark"] .content div[style*="background:#f5f5f5"],
+  [data-theme="dark"] .content div[style*="background:#f8f8f8"],
+  [data-theme="dark"] .content div[style*="background:#fafafa"] { background:var(--bg) !important; }
+  [data-theme="dark"] .content tr:hover { background:rgba(255,255,255,.03) !important; }
+  [data-theme="dark"] .content .data-table td { color:var(--text); border-color:var(--border); }
+  [data-theme="dark"] .content .form-group label { color:var(--text-light); }
+  [data-theme="dark"] .content .empty-state { color:var(--text-light); }
+  [data-theme="dark"] .content .empty-state h3 { color:var(--text); }
+  [data-theme="dark"] .topbar { background:var(--white); border-color:var(--border); }
+  [data-theme="dark"] .topbar h2 { color:var(--text); }
+  [data-theme="dark"] .topbar-avatar { background:#4a5568; }
+  [data-theme="dark"] .avatar-menu { background:var(--white); border-color:var(--border); }
+  [data-theme="dark"] .avatar-menu button { color:var(--text); }
+  [data-theme="dark"] .notif-dropdown { background:var(--white); border-color:var(--border); }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; font-size:14px; }
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; font-size:15px; }
+  /* Font loaded via <link> tag above */
 
   /* ── Layout ── */
   .app { display:flex; height:100vh; }
 
-  /* ── Sidebar (Jobber-style light) ── */
+  /* ── Sidebar (App-style light) ── */
   .sidebar {
     width:var(--sidebar-w); background:var(--sidebar-bg); color:var(--text);
     display:flex; flex-direction:column; flex-shrink:0;
@@ -141,7 +170,7 @@
     font-size:10px; color:#9ca3af;
   }
 
-  /* ── Main Content (Jobber style) ── */
+  /* ── Main Content (App style) ── */
   .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
   .topbar {
     display:flex; align-items:center; justify-content:space-between;
@@ -166,6 +195,7 @@
   .content { flex:1; overflow-y:auto; padding:24px; scroll-behavior:smooth; }
   .content > * { animation:fadeInUp .25s ease-out; }
   @keyframes fadeInUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
 
   /* ── Mobile hamburger ── */
   .hamburger {
@@ -176,7 +206,7 @@
     display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:99;
   }
 
-  /* ── Dashboard Cards (Jobber style) ── */
+  /* ── Dashboard Cards (App style) ── */
   .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px; }
   .stat-card {
     background:var(--white); border-radius:10px; padding:16px 18px;
@@ -191,18 +221,23 @@
   .stat-card .stat-trend.up { color:#16a34a; }
   .stat-card .stat-trend.down { color:var(--red); }
 
-  /* ── Tables (Jobber style) ── */
+  /* ── Tables (App style) ── */
   .data-table { width:100%; border-collapse:collapse; background:var(--white); border-radius:10px; overflow:hidden; border:1px solid var(--border); }
   .data-table th { background:#f9fafb; padding:10px 16px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-light); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:1; }
   .data-table th[onclick]:hover { background:#eef1f5; color:var(--text); }
   .data-table th.sort-active { color:var(--accent); }
-  .data-table td { padding:11px 16px; font-size:13px; border-bottom:1px solid #f3f4f6; transition:background .1s; }
+  .data-table td { padding:12px 16px; font-size:14px; border-bottom:1px solid #f3f4f6; transition:background .1s; }
   .data-table tbody tr:hover { background:#f0f9f4; cursor:pointer; }
   .data-table tbody tr:hover td { color:var(--text); }
   .data-table tr:last-child td { border:none; }
   .data-table td:first-child { font-weight:500; }
 
-  /* ── Status Badges (Jobber colors) ── */
+  /* Card-style list (Airbnb/Jobber look) */
+  .client-card:hover, .client-card:active { box-shadow:0 4px 14px rgba(0,0,0,0.08) !important; transform:translateY(-1px); }
+  .client-card:active { transform:scale(0.99); background:var(--green-bg) !important; }
+  [data-theme="dark"] .client-card { background:var(--white) !important; border-color:var(--border) !important; }
+
+  /* ── Status Badges (App colors) ── */
   .status-badge {
     display:inline-block; padding:2px 10px; border-radius:12px;
     font-size:11px; font-weight:600; letter-spacing:.01em;
@@ -231,7 +266,7 @@
   .filter-btn:hover { border-color:#9ca3af; color:var(--text); }
   .filter-btn.active, .filter-btn[style*="background:var(--green-dark)"] { background:var(--accent) !important; color:#fff !important; border-color:var(--accent) !important; }
 
-  /* ── Search (Jobber style) ── */
+  /* ── Search (App style) ── */
   .search-box {
     display:flex; align-items:center; gap:8px; padding:8px 14px;
     background:var(--bg); border:1px solid var(--border); border-radius:10px;
@@ -247,27 +282,7 @@
   .empty-state h3 { font-size:16px; color:var(--text); margin-bottom:6px; font-weight:600; }
   .empty-state p { font-size:13px; max-width:380px; margin:0 auto; }
 
-  /* ── Mobile Bottom Nav (Jobber-style) ── */
-  .bottom-nav {
-    display:none; position:fixed; bottom:0; left:0; right:0; z-index:150;
-    background:var(--white); border-top:1px solid var(--border);
-    padding:6px 0 env(safe-area-inset-bottom, 8px);
-    box-shadow:0 -4px 20px rgba(0,0,0,.08);
-  }
-  .bottom-nav-inner {
-    display:flex; justify-content:space-around; align-items:center;
-  }
-  .bottom-nav-btn {
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-    background:none; border:none; padding:4px 12px; cursor:pointer;
-    font-size:10px; color:var(--text-light); font-weight:600;
-    transition:color .15s; -webkit-tap-highlight-color:transparent;
-  }
-  .bottom-nav-btn.active { color:var(--accent); }
-  .bottom-nav-btn:active { transform:scale(.9); }
-  .bottom-nav-btn .bnav-icon { font-size:20px; display:block; margin:0 auto 2px; }
-  .bottom-nav-btn svg.bnav-icon { width:22px; height:22px; }
-  .bottom-nav-btn svg.bnav-icon.active-icon { stroke:var(--accent); }
+  /* Bottom nav removed — using sidebar on all viewports */
 
   /* ── Responsive ── */
   @media (max-width: 768px) {
@@ -276,52 +291,102 @@
     .sidebar-overlay.open { display:block; }
     .hamburger { display:block; }
     .stat-grid { grid-template-columns:1fr 1fr; }
-    .content { padding:16px; padding-bottom:88px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .content { padding:16px; padding-bottom:24px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
     .topbar { padding:10px 16px; padding-top:max(10px,env(safe-area-inset-top)); }
     .search-box { min-width:auto; flex:1; }
-    .bottom-nav { display:block; }
+    /* bottom-nav removed */
     .detail-grid { grid-template-columns:1fr !important; }
     .option-grid { grid-template-columns:1fr !important; }
 
-    /* Jobber-style native feel */
-    .sidebar { display:none !important; }
-    .sidebar-overlay { display:none !important; }
-    .hamburger { display:none !important; }
+    /* Full sidebar on mobile — slide in/out via hamburger */
+    .sidebar { display:flex !important; transform:translateX(-100%); z-index:200; }
+    .sidebar.open { transform:translateX(0); }
+    .sidebar-overlay { display:none; }
+    .sidebar-overlay.open { display:block !important; }
+    .hamburger { display:block !important; }
+    /* bottom-nav removed */
     .main { margin-left:0 !important; }
 
     /* Rounded cards */
     .card, .stat-card { border-radius:14px !important; }
     .stat-card { padding:14px !important; }
 
-    /* Jobber stat card rows — stack 2x2 on mobile */
+    /* App stat card rows — stack 2x2 on mobile, 1 col on tiny */
     .stat-row { grid-template-columns:1fr 1fr !important; }
+    @media (max-width:400px) { .stat-row { grid-template-columns:1fr !important; } }
+
+    /* Detail grids — stack on mobile */
+    .detail-grid { grid-template-columns:1fr !important; }
+
+    /* Quote/Invoice line items — single column on mobile */
+    .quote-item-row { grid-template-columns:1fr !important; gap:6px !important; }
 
     /* Make tables horizontally scrollable on mobile */
     div:has(> .data-table) { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
     .data-table { min-width:620px; }
     .data-table th, .data-table td { white-space:nowrap; font-size:12px !important; padding:10px 8px !important; }
 
-    /* Larger inputs */
+    /* Larger inputs + touch targets */
     input, select, textarea { font-size:16px !important; padding:12px !important; border-radius:10px !important; }
     .btn { min-height:44px; border-radius:12px !important; }
 
-    /* Toast above tabs */
-    .toast { bottom:96px !important; left:16px !important; right:16px !important; border-radius:12px !important; }
+    /* Touch targets for topbar */
+    .hamburger { padding:8px !important; min-width:44px; min-height:44px; display:flex !important; align-items:center; justify-content:center; }
+    .topbar-icon { min-width:38px; min-height:38px; }
+    .topbar-icon-create { width:38px !important; height:38px !important; }
 
-    /* Modal slides up from bottom */
-    .modal { max-width:100% !important; max-height:95vh !important; border-radius:20px 20px 0 0 !important; margin-top:auto !important; }
-    .modal-overlay { align-items:flex-end !important; }
+    /* Safe areas for iPhone notch/home indicator */
+    .content { padding-bottom:max(24px, env(safe-area-inset-bottom)) !important; }
+    .toast { bottom:max(24px, env(safe-area-inset-bottom)) !important; left:16px !important; right:16px !important; border-radius:12px !important; }
+    .modal { padding-bottom:env(safe-area-inset-bottom) !important; }
+
+    /* z-index hierarchy: sidebar-overlay(150) < sidebar(200) < modal(300) < toast(400) < search(500) */
+    .sidebar-overlay { z-index:150 !important; }
+    .sidebar { z-index:200 !important; }
+    .modal-overlay { z-index:300 !important; }
+    .avatar-menu { z-index:350 !important; }
+    .toast { z-index:400 !important; }
+
+    /* Hide "Menu" text on very small screens */
+    @media (max-width:400px) { .hamburger::after { content:'' !important; } }
+
+    /* Modal full-screen on mobile */
+    .modal-overlay { padding:0 !important; align-items:flex-end !important; }
+    .modal { position:fixed !important; left:0 !important; right:0 !important; bottom:0 !important; max-width:none !important; width:100% !important; max-height:95vh !important; border-radius:20px 20px 0 0 !important; margin:0 !important; overflow:hidden !important; }
+    .modal-body { overflow-x:hidden !important; overflow-y:auto !important; -webkit-overflow-scrolling:touch; }
+    .modal-body form, .modal-body > div { max-width:100% !important; overflow-x:hidden !important; }
 
     /* Filter chips wrap nicely */
     .filter-btn { font-size:11px !important; padding:6px 10px !important; }
 
-    /* Topbar icons — keep + and bell visible, hide rest */
-    .topbar-icons > button:not(.topbar-icon-create),
-    .topbar-icons > div:first-of-type { display:none; }
-    .topbar-icons > div:has(#notif-bell-btn) { display:block !important; }
+    /* App-style topbar: hamburger + Menu left, icon row right */
+    .topbar h2 { display:none; }
+    .hamburger { display:flex !important; align-items:center; gap:6px; }
+    .hamburger::after { content:'Menu'; font-size:14px; font-weight:600; color:var(--text); }
 
-    /* Search: full-screen overlay on mobile */
-    .search-box { position:static !important; }
+    /* Hide full search input bar — use icon instead */
+    .search-box { display:none !important; }
+
+    /* Show all topbar icons */
+    .topbar-icons { display:flex !important; gap:6px; }
+    .topbar-icons > button,
+    .topbar-icons > div { display:flex !important; }
+    .topbar-icons > div:first-of-type { display:none !important; } /* hide divider */
+
+    /* Show mobile search icon */
+    .mobile-search-icon { display:flex !important; }
+
+    /* Show all nav icons on mobile */
+    div.topbar-avatar { display:flex !important; }
+    button#dark-mode-btn { display:flex !important; }
+    button[onclick*="AI.toggle"] { display:flex !important; }
+
+    /* + button — mobile: make it bigger + add label so it's findable */
+    .topbar-icon-create { width:auto !important; min-width:60px !important; height:36px !important; padding:0 14px !important; display:flex !important; align-items:center !important; gap:4px !important; font-weight:700 !important; color:#fff !important; }
+    .topbar-icon-create::after { content:'New'; font-size:13px; color:#fff; }
+
+    /* Topbar compact padding */
+    .topbar { padding:8px 12px !important; gap:8px; }
     #searchDropdown.mobile-open {
       position:fixed !important; top:0 !important; left:0 !important; right:0 !important;
       bottom:0 !important; margin:0 !important; border-radius:0 !important;
@@ -329,21 +394,7 @@
       border:none !important; padding-top:calc(64px + env(safe-area-inset-top, 0px));
       -webkit-overflow-scrolling:touch; overflow-y:auto !important;
     }
-    #search-mobile-header {
-      display:none; position:fixed; top:0; left:0; right:0; z-index:501;
-      background:var(--white); border-bottom:1px solid var(--border);
-      padding:calc(10px + env(safe-area-inset-top, 0px)) 12px 10px; align-items:center; gap:10px;
-    }
-    #search-mobile-header.visible { display:flex; }
-    #search-mobile-input {
-      flex:1; border:1px solid var(--border); border-radius:10px; padding:10px 14px;
-      font-size:16px; outline:none; background:var(--bg); color:var(--text);
-    }
-    #search-mobile-input:focus { border-color:var(--accent); }
-    #search-mobile-close {
-      background:none; border:none; font-size:15px; color:var(--text-light);
-      cursor:pointer; font-weight:600; padding:6px 10px; white-space:nowrap;
-    }
+    /* search-mobile removed — using search page */
   }
   @media (max-width: 480px) {
     .stat-grid { grid-template-columns:1fr; }
@@ -351,7 +402,7 @@
 
   /* ── Print ── */
   @media print {
-    .sidebar, .bottom-nav, .topbar, .modal-overlay, .sidebar-overlay, #inv-bulk-bar { display:none !important; }
+    .sidebar, .topbar, .modal-overlay, .sidebar-overlay, #inv-bulk-bar { display:none !important; }
     .app { display:block !important; }
     .content-area { margin-left:0 !important; }
     .content { overflow:visible !important; height:auto !important; padding:0 !important; }
@@ -372,12 +423,21 @@
   .modal-overlay.open { opacity:1; }
   .modal {
     background:var(--white); border-radius:16px; max-width:560px; width:100%;
-    max-height:85vh; display:flex; flex-direction:column;
+    max-height:90vh; display:flex; flex-direction:column;
     box-shadow:0 24px 80px rgba(0,0,0,.25), 0 8px 20px rgba(0,0,0,.1);
     transform:translateY(20px) scale(.98); transition:transform .25s cubic-bezier(.16,1,.3,1);
   }
   .modal-overlay.open .modal { transform:translateY(0) scale(1); }
   .modal.modal-wide { max-width:800px; }
+  .modal.modal-full {
+    max-height:none; height:100vh; border-radius:0; max-width:680px;
+  }
+  .modal.modal-full .modal-body {
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  @media (max-width:700px) {
+    .modal.modal-full { max-width:100%; }
+  }
   .modal-header {
     display:flex; align-items:center; justify-content:space-between;
     padding:16px 20px; border-bottom:1px solid var(--border);
@@ -414,7 +474,7 @@
   .toast-success { background:rgba(0,131,108,.95); color:#fff; }
   .toast-error { background:rgba(220,53,69,.95); color:#fff; }
 
-  /* ── Topbar Icons (Jobber style) ── */
+  /* ── Topbar Icons (App style) ── */
   .topbar-icons {
     display:flex; align-items:center; gap:2px; margin-left:8px;
   }
@@ -536,7 +596,7 @@
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
   <!-- Sidebar -->
-  <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
     <div class="sidebar-header" onclick="toggleSidebar()">
       <div class="sidebar-logo">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -547,16 +607,32 @@
       <h1>Branch Manager <span>Second Nature Tree Service</span></h1>
     </div>
     <div class="sidebar-nav">
+      <!-- Core nav — matches Jobber -->
       <button class="nav-item active" data-page="dashboard"><span class="icon"><i data-lucide="layout-dashboard" class="li"></i></span> Home</button>
-      <button class="nav-item" data-page="schedule"><span class="icon"><i data-lucide="calendar" class="li"></i></span> Calendar</button>
+      <button class="nav-item" data-page="schedule"><span class="icon"><i data-lucide="calendar" class="li"></i></span> Schedule</button>
       <button class="nav-item" data-page="clients"><span class="icon"><i data-lucide="users" class="li"></i></span> Clients <span class="badge" id="badge-clients"></span></button>
       <button class="nav-item" data-page="requests"><span class="icon"><i data-lucide="inbox" class="li"></i></span> Requests <span class="badge" id="badge-requests"></span></button>
-      <button class="nav-item" data-page="quotes"><span class="icon"><i data-lucide="file-text" class="li"></i></span> Quotes</button>
-      <button class="nav-item" data-page="jobs"><span class="icon"><i data-lucide="wrench" class="li"></i></span> Jobs</button>
-      <button class="nav-item" data-page="invoices"><span class="icon"><i data-lucide="receipt" class="li"></i></span> Invoices</button>
-      <button class="nav-item" data-page="payments"><span class="icon"><i data-lucide="credit-card" class="li"></i></span> Payments</button>
+      <button class="nav-item" data-page="quotes"><span class="icon"><i data-lucide="file-text" class="li"></i></span> Quotes <span class="badge" id="badge-quotes"></span></button>
+      <button class="nav-item" data-page="jobs"><span class="icon"><i data-lucide="wrench" class="li"></i></span> Jobs <span class="badge" id="badge-jobs"></span></button>
+      <button class="nav-item" data-page="invoices"><span class="icon"><i data-lucide="receipt" class="li"></i></span> Invoices <span class="badge" id="badge-invoices"></span></button>
 
-      <!-- Marketing (collapsible, matches Jobber exactly) -->
+      <!-- Reports (collapsible) -->
+      <button class="nav-item" id="reports-toggle" onclick="(function(){var el=document.getElementById('reports-sub');var open=el.style.display!=='none';el.style.display=open?'none':'block';document.getElementById('reports-chevron').style.transform=open?'':'rotate(90deg)';})()">
+        <span class="icon"><i data-lucide="bar-chart-3" class="li"></i></span>
+        Reports
+        <i data-lucide="chevron-right" id="reports-chevron" style="width:14px;height:14px;stroke:currentColor;margin-left:auto;transition:transform .2s;"></i>
+      </button>
+      <div id="reports-sub" style="display:none;padding-left:14px;">
+        <button class="nav-item" data-page="insights"><span class="icon"><i data-lucide="pie-chart" class="li"></i></span> Overview</button>
+        <button class="nav-item" data-page="profitloss"><span class="icon"><i data-lucide="line-chart" class="li"></i></span> Profit & Loss</button>
+        <button class="nav-item" data-page="expenses"><span class="icon"><i data-lucide="trending-up" class="li"></i></span> Expenses</button>
+        <button class="nav-item" data-page="jobcosting"><span class="icon"><i data-lucide="dollar-sign" class="li"></i></span> Job Costing</button>
+        <button class="nav-item" data-page="budget"><span class="icon"><i data-lucide="piggy-bank" class="li"></i></span> Budget</button>
+        <button class="nav-item" data-page="weeklysummary"><span class="icon"><i data-lucide="clipboard-list" class="li"></i></span> Weekly Summary</button>
+        <button class="nav-item" data-page="reports"><span class="icon"><i data-lucide="download" class="li"></i></span> Export</button>
+      </div>
+
+      <!-- Marketing (collapsible) -->
       <button class="nav-item" id="marketing-toggle" onclick="(function(){var el=document.getElementById('marketing-sub');var open=el.style.display!=='none';el.style.display=open?'none':'block';document.getElementById('marketing-chevron').style.transform=open?'':'rotate(90deg)';})()">
         <span class="icon"><i data-lucide="megaphone" class="li"></i></span>
         Marketing
@@ -564,100 +640,89 @@
       </button>
       <div id="marketing-sub" style="display:none;padding-left:14px;">
         <button class="nav-item" data-page="reviews"><span class="icon"><i data-lucide="star" class="li"></i></span> Reviews</button>
+        <button class="nav-item" data-page="reviewtools"><span class="icon"><i data-lucide="thumbs-up" class="li"></i></span> Review Tools</button>
         <button class="nav-item" data-page="campaigns"><span class="icon"><i data-lucide="mail" class="li"></i></span> Campaigns</button>
         <button class="nav-item" data-page="referrals"><span class="icon"><i data-lucide="share-2" class="li"></i></span> Referrals</button>
-        <button class="nav-item" data-page="onlinebooking"><span class="icon"><i data-lucide="globe" class="li"></i></span> Website</button>
+        <button class="nav-item" data-page="onlinebooking"><span class="icon"><i data-lucide="globe" class="li"></i></span> Online Booking</button>
+        <button class="nav-item" onclick="window.open('https://peekskilltree.com','_blank')" style="opacity:.85;"><span class="icon"><i data-lucide="external-link" class="li"></i></span> Website</button>
       </div>
 
-      <div style="border-top:1px solid rgba(255,255,255,.06);margin:8px 10px 4px;"></div>
+      <div style="border-top:1px solid var(--sidebar-border);margin:8px 10px 4px;"></div>
       <button class="nav-item" data-page="settings"><span class="icon"><i data-lucide="settings" class="li"></i></span> Settings</button>
 
-      <!-- More — everything beyond Jobber's core -->
+      <!-- More -->
       <div class="nav-section" style="cursor:pointer;margin-top:4px;" onclick="var el=document.getElementById('more-nav');el.style.display=el.style.display==='none'?'block':'none';this.querySelector('.more-arrow').textContent=el.style.display==='none'?'&#9656;':'&#9662;';">More <span class="more-arrow" style="float:right;">&#9656;</span></div>
       <div id="more-nav" style="display:none;">
-        <!-- Team -->
+        <div class="nav-section">People</div>
         <button class="nav-item" data-page="team"><span class="icon"><i data-lucide="hard-hat" class="li"></i></span> Team</button>
         <button class="nav-item" data-page="timesheet"><span class="icon"><i data-lucide="clock" class="li"></i></span> Timesheets</button>
         <button class="nav-item" data-page="payroll"><span class="icon"><i data-lucide="wallet" class="li"></i></span> Payroll</button>
-        <button class="nav-item" data-page="permissions"><span class="icon"><i data-lucide="shield" class="li"></i></span> Permissions</button>
-        <!-- Money -->
-        <button class="nav-item" data-page="expenses"><span class="icon"><i data-lucide="trending-up" class="li"></i></span> Expenses</button>
-        <button class="nav-item" data-page="insights"><span class="icon"><i data-lucide="bar-chart-3" class="li"></i></span> Reporting</button>
-        <!-- Finance -->
-        <button class="nav-item" data-page="profitloss"><span class="icon"><i data-lucide="line-chart" class="li"></i></span> Profit/Loss</button>
-        <button class="nav-item" data-page="jobcosting"><span class="icon"><i data-lucide="dollar-sign" class="li"></i></span> Job Costing</button>
-        <button class="nav-item" data-page="budget"><span class="icon"><i data-lucide="piggy-bank" class="li"></i></span> Budget</button>
-        <button class="nav-item" data-page="weeklysummary"><span class="icon"><i data-lucide="clipboard-list" class="li"></i></span> Weekly Summary</button>
-        <button class="nav-item" data-page="reports"><span class="icon"><i data-lucide="download" class="li"></i></span> Export Reports</button>
-        <!-- Marketing extras -->
-        <button class="nav-item" data-page="reviewtools"><span class="icon"><i data-lucide="award" class="li"></i></span> Review Tools</button>
-        <button class="nav-item" data-page="satisfaction"><span class="icon"><i data-lucide="smile" class="li"></i></span> Satisfaction</button>
+        <button class="nav-item" data-page="crewperformance"><span class="icon"><i data-lucide="trophy" class="li"></i></span> Performance</button>
+        <button class="nav-item" data-page="employeecenter"><span class="icon"><i data-lucide="banknote" class="li"></i></span> My Pay</button>
+        <button class="nav-item" onclick="window.open('onboarding/','_blank')" style="opacity:.85;"><span class="icon"><i data-lucide="graduation-cap" class="li"></i></span> Onboarding</button>
+
+        <div class="nav-section">Team Chat</div>
+        <button class="nav-item" data-page="teamchat"><span class="icon"><i data-lucide="message-circle" class="li"></i></span> Team Chat</button>
+        <button class="nav-item" data-page="taskreminders"><span class="icon"><i data-lucide="check-circle" class="li"></i></span> Tasks & Reminders</button>
+
+        <div class="nav-section">Operations</div>
+        <button class="nav-item" data-page="dispatch"><span class="icon"><i data-lucide="truck" class="li"></i></span> Dispatch</button>
+        <button class="nav-item" data-page="pipeline"><span class="icon"><i data-lucide="kanban" class="li"></i></span> Pipeline</button>
+        <button class="nav-item" data-page="recurring"><span class="icon"><i data-lucide="repeat" class="li"></i></span> Recurring</button>
+        <button class="nav-item" data-page="automations"><span class="icon"><i data-lucide="zap" class="li"></i></span> Automations</button>
+        <button class="nav-item" data-page="checklists"><span class="icon"><i data-lucide="check-square" class="li"></i></span> Checklists</button>
+        <button class="nav-item" data-page="equipment"><span class="icon"><i data-lucide="cog" class="li"></i></span> Equipment</button>
+
+        <div class="nav-section">Client Hub</div>
         <button class="nav-item" data-page="clienthub"><span class="icon"><i data-lucide="user-check" class="li"></i></span> Client Portal</button>
-        <button class="nav-item" data-page="formbuilder"><span class="icon"><i data-lucide="layout" class="li"></i></span> Form Builder</button>
+        <button class="nav-item" data-page="messaging"><span class="icon"><i data-lucide="message-square" class="li"></i></span> Messages</button>
+        <button class="nav-item" data-page="satisfaction"><span class="icon"><i data-lucide="smile" class="li"></i></span> Satisfaction</button>
+        <button class="nav-item" data-page="formbuilder"><span class="icon"><i data-lucide="layout" class="li"></i></span> Forms</button>
+        <button class="nav-item" data-page="emailtemplates"><span class="icon"><i data-lucide="file-edit" class="li"></i></span> Email Templates</button>
+        <button class="nav-item" data-page="receptionist"><span class="icon"><i data-lucide="phone" class="li"></i></span> Receptionist</button>
+
+        <div class="nav-section">Media</div>
         <button class="nav-item" data-page="mediacenter"><span class="icon"><i data-lucide="camera" class="li"></i></span> Media Center <span class="badge" id="badge-mediacenter"></span></button>
         <button class="nav-item" data-page="beforeafter"><span class="icon"><i data-lucide="image" class="li"></i></span> Before/After</button>
-        <!-- Operations -->
-        <button class="nav-item" data-page="pipeline"><span class="icon"><i data-lucide="kanban" class="li"></i></span> Pipeline</button>
-        <button class="nav-item" data-page="workflow"><span class="icon"><i data-lucide="workflow" class="li"></i></span> Workflow</button>
-        <button class="nav-item" data-page="dispatch"><span class="icon"><i data-lucide="truck" class="li"></i></span> Dispatch</button>
-        <button class="nav-item" data-page="recurring"><span class="icon"><i data-lucide="repeat" class="li"></i></span> Recurring Jobs</button>
-        <button class="nav-item" data-page="visits"><span class="icon"><i data-lucide="calendar-check" class="li"></i></span> Visits</button>
-        <button class="nav-item" data-page="checklists"><span class="icon"><i data-lucide="check-square" class="li"></i></span> Checklists</button>
-        <button class="nav-item" data-page="automations"><span class="icon"><i data-lucide="zap" class="li"></i></span> Automations</button>
-        <button class="nav-item" data-page="reminders" id="nav-reminders"><span class="icon"><i data-lucide="shield-alert" class="li"></i></span> Compliance <span class="badge" id="badge-reminders"></span></button>
-        <!-- Team extras -->
-        <button class="nav-item" data-page="crewview"><span class="icon"><i data-lucide="shield" class="li"></i></span> Crew View</button>
-        <button class="nav-item" data-page="crewperformance"><span class="icon"><i data-lucide="trophy" class="li"></i></span> Performance</button>
-        <button class="nav-item" data-page="employeecenter"><span class="icon"><i data-lucide="wallet" class="li"></i></span> My Pay</button>
-        <!-- Maps & Field -->
-        <button class="nav-item" data-page="propertymap"><span class="icon"><i data-lucide="map" class="li"></i></span> Property Map</button>
-        <button class="nav-item" data-page="clientmap"><span class="icon"><i data-lucide="map-pin" class="li"></i></span> Client Map</button>
-        <button class="nav-item" data-page="photomap"><span class="icon"><i data-lucide="camera" class="li"></i></span> Photo Map</button>
-        <button class="nav-item" data-page="equipment"><span class="icon"><i data-lucide="cog" class="li"></i></span> Equipment</button>
-        <button class="nav-item" data-page="materials"><span class="icon"><i data-lucide="package" class="li"></i></span> Materials</button>
-        <!-- Communications -->
-        <button class="nav-item" data-page="receptionist"><span class="icon"><i data-lucide="phone" class="li"></i></span> Receptionist</button>
-        <button class="nav-item" data-page="messaging"><span class="icon"><i data-lucide="message-square" class="li"></i></span> Messages</button>
-        <button class="nav-item" data-page="comms"><span class="icon"><i data-lucide="phone-call" class="li"></i></span> Comms Log</button>
-        <button class="nav-item" data-page="notifications"><span class="icon"><i data-lucide="bell" class="li"></i></span> Activity Feed</button>
-        <button class="nav-item" data-page="emailtemplates"><span class="icon"><i data-lucide="mail" class="li"></i></span> Email Templates</button>
-        <!-- Tools & Admin -->
-        <button class="nav-item" data-page="ai"><span class="icon"><i data-lucide="bot" class="li"></i></span> Claude AI</button>
+
+        <div class="nav-section">Tools</div>
+        <button class="nav-item" data-page="ai"><span class="icon"><i data-lucide="bot" class="li"></i></span> AI Assistant</button>
         <button class="nav-item" data-page="calculators"><span class="icon"><i data-lucide="calculator" class="li"></i></span> Calculators</button>
+        <button class="nav-item" data-page="aitreeid"><span class="icon"><i data-lucide="scan-eye" class="li"></i></span> AI Tree ID <span style="background:#7c3aed;color:#fff;padding:1px 6px;border-radius:6px;font-size:9px;font-weight:700;margin-left:4px;">BETA</span></button>
+        <button class="nav-item" data-page="videoquote"><span class="icon"><i data-lucide="video" class="li"></i></span> Video Quote <span style="background:#7c3aed;color:#fff;padding:1px 6px;border-radius:6px;font-size:9px;font-weight:700;margin-left:4px;">BETA</span></button>
         <button class="nav-item" data-page="treemeasure"><span class="icon"><i data-lucide="ruler" class="li"></i></span> Tree Measure</button>
-        <button class="nav-item" data-page="customfields"><span class="icon"><i data-lucide="sliders" class="li"></i></span> Custom Fields</button>
-        <button class="nav-item" data-page="backup"><span class="icon"><i data-lucide="database" class="li"></i></span> Backup</button>
-        <button class="nav-item" data-page="import"><span class="icon"><i data-lucide="upload" class="li"></i></span> Import Data</button>
       </div>
     </div>
 
-    <div class="sidebar-footer" style="display:flex;gap:6px;padding:10px 14px;">
-      <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:rgba(0,0,0,.04);border:1px solid #e8eaed;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;color:#9ca3af;flex:1;" title="Collapse sidebar">◀</button>
-      <button class="log-out-btn" onclick="Auth.logout()" style="background:rgba(0,0,0,.04);border:1px solid #e8eaed;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:#dc3545;white-space:nowrap;" title="Log out">Log Out</button>
+    <div class="sidebar-footer" style="padding:10px 14px;">
+      <button onclick="loadPage('modeselector')" style="width:100%;background:rgba(0,0,0,.04);border:1px solid #e8eaed;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px;color:var(--text-light);margin-bottom:6px;">Switch Mode</button>
+      <div style="display:flex;gap:6px;">
+        <button id="sidebar-toggle-btn" onclick="toggleSidebar()" style="background:rgba(0,0,0,.04);border:1px solid #e8eaed;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;color:#9ca3af;flex:1;" title="Collapse sidebar">◀</button>
+        <button class="log-out-btn" onclick="Auth.logout()" style="background:rgba(0,0,0,.04);border:1px solid #e8eaed;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;color:#dc3545;white-space:nowrap;" title="Log out">Log Out</button>
+      </div>
     </div>
   </nav>
 
-  <!-- Mobile Search Overlay Header -->
-  <div id="search-mobile-header">
-    <button id="search-mobile-close" onclick="_closeMobileSearch()">✕ Cancel</button>
-    <input type="text" id="search-mobile-input" placeholder="Search clients, jobs, quotes..." autocomplete="off">
-  </div>
+  <!-- Mobile search overlay removed — using search page instead -->
 
   <!-- Main Content -->
-  <div class="main">
+  <div class="main" role="main">
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:12px;">
-        <button class="hamburger" onclick="toggleSidebar()"><i data-lucide="menu" style="width:22px;height:22px;stroke:var(--text);stroke-width:1.75;"></i></button>
+        <button class="hamburger" onclick="toggleSidebar()" aria-label="Open navigation menu" role="button"><i data-lucide="menu" style="width:22px;height:22px;stroke:var(--text);stroke-width:1.75;"></i></button>
         <h2 id="pageTitle">Dashboard</h2>
       </div>
       <div class="topbar-actions">
+        <button class="topbar-icon mobile-search-icon" onclick="loadPage('search')" title="Search" style="display:none;">
+          <i data-lucide="search" style="width:18px;height:18px;stroke:var(--text-light);stroke-width:1.75;"></i>
+        </button>
         <div class="search-box" style="position:relative;">
           <i data-lucide="search" style="width:15px;height:15px;stroke:var(--text-light);stroke-width:2;flex-shrink:0;"></i>
           <input type="text" placeholder="Search clients, jobs..." id="globalSearch" autocomplete="off">
           <div id="searchDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.15);max-height:70vh;overflow-y:auto;z-index:999;min-width:320px;"></div>
         </div>
         <div class="topbar-icons">
-          <button class="topbar-icon topbar-icon-create" onclick="QuickCreate.show()" title="New…" style="background:var(--accent);border-radius:8px;width:32px;height:32px;">
+          <button class="topbar-icon topbar-icon-create" onclick="BM_contextCreate()" title="New…" style="background:var(--accent);border-radius:8px;width:32px;height:32px;">
             <i data-lucide="plus" style="width:18px;height:18px;stroke:#fff;stroke-width:2.5;"></i>
           </button>
           <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
@@ -680,7 +745,7 @@
           <div class="topbar-avatar" onclick="this.querySelector('.avatar-menu').classList.toggle('open')">
             <span id="topbar-avatar-initials">DB</span>
             <div class="avatar-menu">
-              <div class="avatar-menu-header">Doug Brown<br><span>Owner · Second Nature Tree</span></div>
+              <div class="avatar-menu-header">Doug Brown<br><span>Owner · Second Nature Tree Service</span></div>
               <button onclick="loadPage('employeecenter')"><i data-lucide="user" style="width:14px;height:14px;stroke:currentColor;vertical-align:middle;margin-right:6px;"></i>My Account</button>
               <button onclick="loadPage('settings')"><i data-lucide="settings" style="width:14px;height:14px;stroke:currentColor;vertical-align:middle;margin-right:6px;"></i>Settings</button>
               <button onclick="window.open('https://peekskilltree.com','_blank')"><i data-lucide="external-link" style="width:14px;height:14px;stroke:currentColor;vertical-align:middle;margin-right:6px;"></i>View Website</button>
@@ -700,58 +765,61 @@
 </div>
 
 <!-- Module scripts -->
-<script src="src/auth.js?v=80"></script>
-<script src="src/db.js?v=80"></script>
-<script src="src/ui.js?v=2"></script>
-<script src="src/pages/dashboard.js?v=11"></script>
-<script src="src/pages/clients.js?v=14"></script>
-<script src="src/pages/requests.js?v=9"></script>
-<script src="src/pages/quotes.js?v=17"></script>
-<script src="src/pages/jobs.js?v=17"></script>
-<script src="src/pages/invoices.js?v=80"></script>
-<script src="src/pages/schedule.js?v=7"></script>
-<script src="src/pages/insights.js?v=7"></script>
+<script src="config.js?v=143"></script>
+<script src="src/auth.js?v=140"></script>
+<script src="src/db.js?v=149"></script>
+<script src="src/ui.js?v=149"></script>
+<script defer src="src/pages/dashboard.js?v=140"></script>
+<script defer src="src/pages/clients.js?v=152"></script>
+<script defer src="src/pages/requests.js?v=147"></script>
+<script defer src="src/pages/quotes.js?v=149"></script>
+<script defer src="src/pages/jobs.js?v=148"></script>
+<script defer src="src/pages/invoices.js?v=149"></script>
+<script defer src="src/pages/schedule.js?v=140"></script>
+<script defer src="src/pages/insights.js?v=140"></script>
 <script src="src/geofence.js"></script>
 <script src="src/weather.js"></script>
-<script src="src/pages/comms.js?v=80"></script>
-<script src="src/pages/messaging.js?v=5"></script>
-<script src="src/pages/profitloss.js?v=80"></script>
+<script defer src="src/pages/comms.js?v=140"></script>
+<script defer src="src/pages/messaging.js?v=140"></script>
+<script defer src="src/pages/profitloss.js?v=140"></script>
 <script src="src/photos.js"></script>
-<script src="src/pages/clientmap.js"></script>
-<script src="src/pages/photomap.js"></script>
-<script src="src/pages/crewview.js?v=5"></script>
-<script src="src/pages/employeecenter.js?v=3"></script>
-<script src="src/pages/budget.js?v=3"></script>
-<script src="src/pages/equipment.js?v=2"></script>
-<script src="src/pages/jobcosting.js?v=2"></script>
-<script src="src/pages/dispatch.js?v=4"></script>
-<script src="src/pages/recurring.js?v=3"></script>
-<script src="src/pages/notifications.js?v=6"></script>
-<script src="src/pages/expenses.js?v=4"></script>
-<script src="src/dialpad.js?v=1"></script>
-<script src="src/email.js?v=4"></script>
-<script src="src/pages/reports.js?v=5"></script>
-<script src="src/pages/reviewtools.js?v=80"></script>
-<script src="src/pages/weeklysummary.js?v=5"></script>
-<script src="src/pages/backup.js?v=4"></script>
-<script src="src/pages/onlinebooking.js?v=4"></script>
-<script src="src/pages/formbuilder.js?v=1"></script>
-<script src="src/pages/receptionist.js?v=80"></script>
-<script src="src/pages/campaigns.js?v=80"></script>
-<script src="src/pages/referrals.js?v=80"></script>
-<script src="src/pages/import.js?v=3"></script>
-<script src="src/stripe.js?v=3"></script>
-<script src="src/sendjim.js"></script>
-<script src="src/pages/settings.js?v=80"></script>
-<script src="src/pages/propertymap.js?v=2"></script>
-<script src="src/pages/estimator.js"></script>
-<script src="src/pages/treemeasure.js"></script>
-<script src="src/pages/search.js?v=2"></script>
-<script src="src/pages/clienthub.js?v=4"></script>
-<script src="src/pages/team.js?v=4"></script>
-<script src="src/pages/automations.js?v=12"></script>
-<script src="src/pages/pipeline.js?v=6"></script>
-<script src="src/supabase.js?v=80"></script>
+<script defer src="src/pages/clientmap.js"></script>
+<script defer src="src/pages/photomap.js"></script>
+<script defer src="src/pages/crewview.js?v=140"></script>
+<script defer src="src/pages/employeecenter.js?v=140"></script>
+<script defer src="src/pages/budget.js?v=140"></script>
+<script defer src="src/pages/equipment.js?v=140"></script>
+<script defer src="src/pages/jobcosting.js?v=140"></script>
+<script defer src="src/pages/dispatch.js?v=140"></script>
+<script defer src="src/pages/recurring.js?v=140"></script>
+<script defer src="src/pages/notifications.js?v=140"></script>
+<script defer src="src/pages/expenses.js?v=140"></script>
+<script src="src/dialpad.js?v=140"></script>
+<script src="src/email.js?v=140"></script>
+<script defer src="src/pages/reports.js?v=140"></script>
+<script defer src="src/pages/reviewtools.js?v=140"></script>
+<script defer src="src/pages/weeklysummary.js?v=140"></script>
+<script defer src="src/pages/backup.js?v=145"></script>
+<script defer src="src/pages/onlinebooking.js?v=140"></script>
+<script defer src="src/pages/formbuilder.js?v=140"></script>
+<script defer src="src/pages/receptionist.js?v=140"></script>
+<script defer src="src/pages/campaigns.js?v=140"></script>
+<script defer src="src/pages/referrals.js?v=140"></script>
+<script defer src="src/pages/import.js?v=140"></script>
+<script src="src/stripe.js?v=140"></script>
+<script defer src="src/sendjim.js"></script>
+<script defer src="src/pages/settings.js?v=151"></script>
+<script defer src="src/pages/propertymap.js?v=140"></script>
+<script defer src="src/pages/estimator.js"></script>
+<script defer src="src/pages/aitreeid.js?v=140"></script>
+<script defer src="src/pages/videoquote.js?v=140"></script>
+<script defer src="src/pages/treemeasure.js"></script>
+<script defer src="src/pages/search.js?v=140"></script>
+<script defer src="src/pages/clienthub.js?v=140"></script>
+<script defer src="src/pages/team.js?v=149"></script>
+<script defer src="src/pages/automations.js?v=140"></script>
+<script defer src="src/pages/pipeline.js?v=146"></script>
+<script src="src/supabase.js?v=145"></script>
 <script>
 // Auto-configure Supabase connection
 if (!localStorage.getItem('bm-supabase-url')) {
@@ -759,41 +827,51 @@ if (!localStorage.getItem('bm-supabase-url')) {
   localStorage.setItem('bm-supabase-key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI');
 }
 </script>
-<script src="src/pdf.js"></script>
-<script src="src/pages/pdfgen.js"></script>
+<script defer src="src/pdf.js"></script>
+<script defer src="src/pages/pdfgen.js"></script>
 <!-- photos.js moved earlier, before photomap.js -->
 <script src="src/templates.js"></script>
-<script src="src/supacloud.js?v=2"></script>
-<script src="src/pages/payments.js?v=5"></script>
-<script src="src/pages/workflow.js?v=12"></script>
-<script src="src/pages/reviews.js?v=80"></script>
-<script src="src/pages/timetrack.js?v=5"></script>
-<script src="src/pages/checklists.js?v=3"></script>
-<script src="src/pages/visits.js?v=3"></script>
-<script src="src/pages/customfields.js?v=2"></script>
-<script src="src/pages/commandpalette.js"></script>
-<script src="src/pages/ai.js?v=7"></script>
-<script src="src/pages/satisfaction.js?v=2"></script>
-<script src="src/pages/emailtemplates.js?v=3"></script>
-<script src="src/pages/crewperformance.js?v=2"></script>
-<script src="src/pages/materials.js"></script>
-<script src="src/pages/beforeafter.js?v=3"></script>
-<script src="src/pages/mediacenter.js?v=2"></script>
-<script src="src/pages/reminders.js?v=3"></script>
-<script src="src/pages/payroll.js?v=80"></script>
-<script src="src/pages/permissions.js?v=80"></script>
+<script src="src/supacloud.js?v=140"></script>
+<script defer src="src/pages/payments.js?v=149"></script>
+<script defer src="src/pages/workflow.js?v=140"></script>
+<script defer src="src/pages/reviews.js?v=140"></script>
+<script defer src="src/pages/timetrack.js?v=140"></script>
+<script defer src="src/pages/checklists.js?v=140"></script>
+<script defer src="src/pages/visits.js?v=140"></script>
+<script defer src="src/pages/customfields.js?v=140"></script>
+<script defer src="src/pages/commandpalette.js"></script>
+<script defer src="src/pages/ai.js?v=146"></script>
+<script defer src="src/pages/satisfaction.js?v=140"></script>
+<script defer src="src/pages/emailtemplates.js?v=140"></script>
+<script defer src="src/pages/crewperformance.js?v=140"></script>
+<script defer src="src/pages/materials.js"></script>
+<script defer src="src/pages/beforeafter.js?v=140"></script>
+<script defer src="src/pages/modeselector.js?v=140"></script>
+<script defer src="src/pages/taskreminders.js?v=140"></script>
+<script defer src="src/pages/teamchat.js?v=140"></script>
+<script defer src="src/pages/mediacenter.js?v=140"></script>
+<script defer src="src/pages/reminders.js?v=140"></script>
+<script defer src="src/pages/payroll.js?v=140"></script>
+<script defer src="src/pages/permissions.js?v=140"></script>
 <script>
 // ── Navigation ──
 var currentPage = 'dashboard';
 document.querySelectorAll('.nav-item').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var page = this.dataset.page;
-    if (page === currentPage) return;
+    if (!page) return;
+    // Always close sidebar on mobile, even if same page
+    if (window.innerWidth <= 768) toggleSidebar();
+    // Same page? Refresh it (scroll to top + reload content)
+    if (page === currentPage) {
+      window.scrollTo(0, 0);
+      loadPage(page);
+      return;
+    }
     currentPage = page;
     document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
     this.classList.add('active');
     loadPage(page);
-    if (window.innerWidth <= 768) toggleSidebar();
   });
 });
 
@@ -813,63 +891,70 @@ function toggleSidebar() {
 
 // ── Page Config ──
 var pageConfigs = {
-  dashboard: { title: 'Dashboard', action: null },
-  pipeline: { title: 'Pipeline', action: '+ Add Deal', actionFn: 'PipelinePage.addDeal("new_lead")' },
-  schedule: { title: 'Schedule', action: '+ New Job', actionFn: 'JobsPage.showForm()' },
-  clients: { title: 'Clients', action: '+ New Client', actionFn: 'ClientsPage.showForm()' },
-  requests: { title: 'Requests', action: '+ New Request', actionFn: 'RequestsPage.showForm()' },
-  quotes: { title: 'Quotes', action: '+ New Quote', actionFn: 'QuotesPage.showForm()' },
-  jobs: { title: 'Jobs', action: '+ New Job', actionFn: 'JobsPage.showForm()' },
-  invoices: { title: 'Invoices', action: '+ New Invoice', actionFn: 'InvoicesPage.showForm()' },
-  insights: { title: 'Insights', action: null },
-  reviews: { title: 'Reviews', action: null },
-  team: { title: 'Team', action: '+ Add Member', actionFn: 'TeamPage.showForm()' },
-  timesheet: { title: 'Timesheet', action: null },
-  automations: { title: 'Automations', action: null },
-  calculators: { title: 'Calculators', action: null },
-  treemeasure: { title: 'Tree Measure', action: null },
-  crewview: { title: 'Crew View', action: null },
-  employeecenter: { title: 'My Pay & Hours', action: null },
-  budget: { title: 'Budget Planner', action: null },
-  dispatch: { title: 'Dispatch', action: '🗺 Open Route', actionFn: 'DispatchPage.openRoute()' },
-  clientmap: { title: 'Client Map', action: null },
-  photomap: { title: 'Photo Map', action: null },
-  messaging: { title: 'Messages', action: null },
-  equipment: { title: 'Equipment', action: '+ Add', actionFn: 'EquipmentPage.showForm()' },
-  jobcosting: { title: 'Job Costing', action: null },
-  recurring: { title: 'Recurring Jobs', action: null },
-  notifications: { title: 'Activity', action: null },
-  expenses: { title: 'Expenses', action: '+ Add Expense', actionFn: 'loadPage("expenses")' },
-  profitloss: { title: 'Profit & Loss', action: null },
-  weeklysummary: { title: 'Weekly Summary', action: null },
-  reviewtools: { title: 'Review Tools', action: null },
-  reports: { title: 'Reports & Exports', action: null },
-  onlinebooking: { title: 'Online Booking', action: null },
-  formbuilder: { title: 'Form Builder', action: null },
-  receptionist: { title: 'Receptionist', action: null },
-  campaigns: { title: 'Campaigns', action: '+ New Campaign', actionFn: 'loadPage("campaigns")' },
-  referrals: { title: 'Referrals', action: null },
-  import: { title: 'Import Data', action: null },
-  backup: { title: 'Backup & Restore', action: null },
-  settings: { title: 'Settings', action: null },
-  crewperformance: { title: 'Crew Performance', action: null },
-  materials: { title: 'Materials & Inventory', action: '+ Add Material', actionFn: 'Materials.showAddMaterial()' },
-  beforeafter: { title: 'Before & After', action: null },
-  mediacenter: { title: 'Media Center', action: '+ Upload Photos', actionFn: 'MediaCenter.showUploadForm()' },
-  reminders: { title: 'Compliance & Reminders', action: '+ Add Reminder', actionFn: 'Reminders.showForm("other")' },
-  comms: { title: 'Communication Log', action: null },
-  satisfaction: { title: 'Client Satisfaction', action: null },
-  emailtemplates: { title: 'Email Templates', action: '+ New Template', actionFn: 'EmailTemplates._showNewTemplateForm()' },
-  customfields: { title: 'Custom Fields', action: null },
-  checklists: { title: 'Checklists', action: null },
-  payments: { title: 'Payment History', action: null },
-  ai: { title: 'AI Assistant', action: null },
-  clienthub: { title: 'Client Portal', action: null },
-  visits: { title: 'Visits', action: null },
-  workflow: { title: 'Workflow', action: null },
-  propertymap: { title: 'Property Map', action: null },
-  payroll: { title: 'Payroll', action: '📊 Summary', actionFn: 'PayrollPage.showPayrollSummary(PayrollPage._getWeekDates(PayrollPage._weekOffset)[0])' },
-  permissions: { title: 'Permissions & Roles', action: null }
+  dashboard: { title: '🏠 Dashboard', action: null },
+  pipeline: { title: '🚀 Pipeline', action: '+ Add Deal', actionFn: 'PipelinePage.addDeal("new_lead")' },
+  schedule: { title: '📅 Schedule', action: null },
+  clients: { title: '👥 Clients', action: '+ New Client', actionFn: 'ClientsPage.showForm()' },
+  requests: { title: '📥 Requests', action: '+ New Request', actionFn: 'RequestsPage.showForm()' },
+  quotes: { title: '📋 Quotes', action: '+ New Quote', actionFn: 'QuotesPage.showForm()' },
+  jobs: { title: '🔧 Jobs', action: null },
+  invoices: { title: '💰 Invoices', action: '+ New Invoice', actionFn: 'InvoicesPage.showForm()' },
+  insights: { title: '📊 Insights', action: null },
+  reviews: { title: '⭐ Reviews', action: null },
+  team: { title: '👷 Team', action: '+ Add Member', actionFn: 'TeamPage.showForm()' },
+  timesheet: { title: '⏱ Timesheet', action: null },
+  automations: { title: '⚡ Automations', action: null },
+  calculators: { title: '🧮 Calculators', action: null },
+  estimator: { title: '🌳 Job Estimator', action: null },
+  aitreeid: { title: '🔍 AI Tree ID', action: null },
+  videoquote: { title: '🎥 Video Quote', action: null },
+  treemeasure: { title: '📏 Tree Measure', action: null },
+  crewview: { title: '🚜 Crew View', action: null },
+  employeecenter: { title: '💵 My Pay & Hours', action: null },
+  budget: { title: '💼 Budget Planner', action: null },
+  dispatch: { title: '🗺 Dispatch', action: 'Open Route', actionFn: 'DispatchPage.openRoute()' },
+  clientmap: { title: '📍 Client Map', action: null },
+  photomap: { title: '📷 Photo Map', action: null },
+  messaging: { title: '💬 Messages', action: null },
+  equipment: { title: '🚛 Equipment', action: '+ Add', actionFn: 'EquipmentPage.showForm()' },
+  jobcosting: { title: '📈 Job Costing', action: null },
+  recurring: { title: '🔁 Recurring Jobs', action: null },
+  notifications: { title: '🔔 Activity', action: null },
+  expenses: { title: '💳 Expenses', action: '+ Add Expense', actionFn: 'loadPage("expenses")' },
+  profitloss: { title: '📑 Profit & Loss', action: null },
+  weeklysummary: { title: '🗓 Weekly Summary', action: null },
+  reviewtools: { title: '🌟 Review Tools', action: null },
+  reports: { title: '📤 Reports & Exports', action: null },
+  onlinebooking: { title: '🌐 Online Booking', action: null },
+  formbuilder: { title: '📝 Form Builder', action: null },
+  receptionist: { title: '📞 Receptionist', action: null },
+  campaigns: { title: '📣 Campaigns', action: '+ New Campaign', actionFn: 'loadPage("campaigns")' },
+  referrals: { title: '🤝 Referrals', action: null },
+  import: { title: '📦 Import Data', action: null },
+  backup: { title: '💾 Backup & Restore', action: null },
+  settings: { title: '⚙️ Settings', action: null },
+  crewperformance: { title: '🏆 Crew Performance', action: null },
+  materials: { title: '📦 Materials & Inventory', action: '+ Add Material', actionFn: 'Materials.showAddMaterial()' },
+  beforeafter: { title: '🖼 Before & After', action: null },
+  modeselector: { title: '🌲 Branch Manager', action: null },
+  taskreminders: { title: '✅ Tasks & Reminders', action: '+ New Task', actionFn: 'TaskReminders._showForm()' },
+  teamchat: { title: '💬 Team Chat', action: null },
+  mediacenter: { title: '📸 Media Center', action: '+ Upload Photos', actionFn: 'MediaCenter.showUploadForm()' },
+  reminders: { title: '🛡 Compliance & Reminders', action: '+ Add Reminder', actionFn: 'Reminders.showForm("other")' },
+  comms: { title: '📨 Communication Log', action: null },
+  satisfaction: { title: '😊 Client Satisfaction', action: null },
+  emailtemplates: { title: '✉️ Email Templates', action: '+ New Template', actionFn: 'EmailTemplates._showNewTemplateForm()' },
+  customfields: { title: '🔧 Custom Fields', action: null },
+  checklists: { title: '☑️ Checklists', action: null },
+  payments: { title: '💵 Payment History', action: null },
+  ai: { title: '🤖 AI Assistant', action: null },
+  clienthub: { title: '🏡 Client Portal', action: null },
+  visits: { title: '📅 Visits', action: null },
+  workflow: { title: '🔀 Workflow', action: null },
+  propertymap: { title: '🗺 Property Map', action: null },
+  payroll: { title: '💸 Payroll', action: 'Summary', actionFn: 'PayrollPage.showPayrollSummary(PayrollPage._getWeekDates(PayrollPage._weekOffset)[0])' },
+  permissions: { title: '🔐 Permissions & Roles', action: null },
+  search: { title: '🔎 Search', action: null }
 };
 
 var pageRenderers = {
@@ -911,10 +996,15 @@ var pageRenderers = {
   import: function() { return ImportPage.render(); },
   backup: function() { return BackupPage.render(); },
   settings: function() { return SettingsPage.render(); },
+  aitreeid: function() { return AITreeID.render(); },
+  videoquote: function() { return VideoQuote.render(); },
   treemeasure: function() { return TreeMeasure.render(); },
   crewperformance: function() { return CrewPerformance.render(); },
   materials: function() { return Materials.render(); },
   beforeafter: function() { return BeforeAfter.render(); },
+  modeselector: function() { return ModeSelector.render(); },
+  taskreminders: function() { return TaskReminders.render(); },
+  teamchat: function() { return TeamChat.render(); },
   mediacenter: function() { return MediaCenter.render(); },
   reminders: function() { return Reminders.render(); },
   comms: function() { return CommsLog.render(); },
@@ -922,17 +1012,19 @@ var pageRenderers = {
   emailtemplates: function() { return EmailTemplates.render(); },
   customfields: function() { return CustomFields.render(); },
   checklists: function() { return Checklists.render(); },
-  payments: function() { return Payments.render(); },
+  payments: function() { InvoicesPage._activeTab = 'payments'; return InvoicesPage.render(); },
   ai: function() { return AI.render(); },
   clienthub: function() { return ClientHub.render(); },
-  visits: function() { return Visits.render(); },
-  workflow: function() { return Workflow.render(); },
+  visits: function() { JobsPage._activeTab = 'visits'; return JobsPage.render(); },
+  workflow: function() { loadPage('dashboard'); return ''; },
   propertymap: function() { return PropertyMap.render(); },
+  search: function() { return SearchPage.render(); },
   payroll: function() { return PayrollPage.render(); },
   permissions: function() { return RBAC.render(); },
+  estimator: function() { return Estimator.render(); },
   calculators: function() {
     return '<div class="stat-grid">'
-      + '<div class="stat-card" style="cursor:pointer;" onclick="Estimator.show()">'
+      + '<div class="stat-card" style="cursor:pointer;" onclick="loadPage(\'estimator\')">'
       + '<div class="stat-label">🧮 Job Estimator</div><div class="stat-value" style="font-size:18px;">Price a Job</div><div class="stat-sub">Crew + equipment + insurance + markup → instant quote</div></div>'
       + '<div class="stat-card" style="cursor:pointer;" onclick="loadPage(\'treemeasure\')">'
       + '<div class="stat-label">🌲 Tree Measure</div><div class="stat-value" style="font-size:18px;">Height & DBH</div><div class="stat-sub">Phone angle for height, tape for DBH → instant estimate</div></div>'
@@ -950,9 +1042,7 @@ var pageRenderers = {
 function checkAuth() {
   if (!Auth.isLoggedIn()) {
     var appEl = document.querySelector('.app');
-    var bottomNav = document.querySelector('.bottom-nav');
     if (appEl) appEl.style.display = 'none';
-    if (bottomNav) bottomNav.style.display = 'none';
     var loginDiv = document.getElementById('login-screen');
     if (!loginDiv) {
       loginDiv = document.createElement('div');
@@ -963,9 +1053,7 @@ function checkAuth() {
     return false;
   }
   var appEl = document.querySelector('.app');
-  var bottomNav = document.querySelector('.bottom-nav');
   if (appEl) appEl.style.display = '';
-  if (bottomNav) bottomNav.style.display = '';
   var loginDiv = document.getElementById('login-screen');
   if (loginDiv) loginDiv.innerHTML = '';
 
@@ -991,23 +1079,46 @@ function checkAuth() {
   return true;
 }
 
+// Context-aware + button — creates the right thing for the current page
+function BM_contextCreate() {
+  // Always show the QuickCreate menu with all options
+  QuickCreate.show();
+}
+
 function loadPage(page) {
   if (!checkAuth()) return;
+  // Update URL hash for browser back button
+  if (window.location.hash !== '#' + page) {
+    history.pushState({ page: page }, '', '#' + page);
+  }
+  window._currentPage = page;
   var config = pageConfigs[page] || { title: page, action: null };
   document.getElementById('pageTitle').textContent = config.title;
   var actionBtn = document.getElementById('pageAction');
   if (config.action) {
     actionBtn.textContent = config.action;
     actionBtn.style.display = '';
-    actionBtn.onclick = config.actionFn ? new Function(config.actionFn) : null;
+    actionBtn.onclick = config.actionFn ? function() { try { (new Function(config.actionFn))(); } catch(e) { console.warn('Action error:', e); } } : null;
   } else {
     actionBtn.style.display = 'none';
   }
 
-  // Update badges
+  // Update sidebar badges
   var newReqs = DB.requests.countNew();
   document.getElementById('badge-requests').textContent = newReqs > 0 ? newReqs : '';
   document.getElementById('badge-clients').textContent = '';
+  // Quotes awaiting response
+  var awaitingQuotes = DB.quotes.count(function(q) { return q.status === 'sent' || q.status === 'awaiting'; });
+  var qBadge = document.getElementById('badge-quotes');
+  if (qBadge) qBadge.textContent = awaitingQuotes > 0 ? awaitingQuotes : '';
+  // Active jobs
+  var activeJobs = DB.jobs.count(function(j) { return j.status === 'scheduled' || j.status === 'in_progress'; });
+  var jBadge = document.getElementById('badge-jobs');
+  if (jBadge) jBadge.textContent = activeJobs > 0 ? activeJobs : '';
+  // Unpaid invoices
+  var unpaidInv = DB.invoices.count(function(i) { return i.status !== 'paid' && i.status !== 'cancelled' && i.balance > 0; });
+  var iBadge = document.getElementById('badge-invoices');
+  if (iBadge) iBadge.textContent = unpaidInv > 0 ? unpaidInv : '';
   // Media center unreviewed badge
   var mediaBadgeEl = document.getElementById('badge-mediacenter');
   if (mediaBadgeEl && typeof MediaCenter !== 'undefined') {
@@ -1020,7 +1131,22 @@ function loadPage(page) {
   if (renderer) {
     content.innerHTML = renderer();
   } else {
-    content.innerHTML = '<div class="empty-state"><div class="empty-icon">🚧</div><h3>Coming Soon</h3><p>' + config.title + ' — building next.</p></div>';
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon" style="font-size:32px;color:var(--text-light);">—</div><h3>Page Not Available</h3><p>' + config.title + ' is not configured yet.</p></div>';
+  }
+
+  // Render Lucide icons added by page renderers
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  // Post-render hooks
+  if (page === 'dispatch' && typeof DispatchPage !== 'undefined' && DispatchPage.initMap) {
+    setTimeout(function() { DispatchPage.initMap(); }, 200);
+  }
+  if (page === 'crewview' && typeof CrewView !== 'undefined' && CrewView._resumeGPS) {
+    CrewView._resumeGPS();
+  }
+  // Clean up dispatch map when leaving
+  if (page !== 'dispatch' && typeof DispatchPage !== 'undefined' && DispatchPage._map) {
+    DispatchPage.destroyMap();
   }
 }
 
@@ -1104,27 +1230,27 @@ function _renderSearchResults(q) {
   var addGroup = function(key, icon, items) { if (items.length) groups.push({ key:key, icon:icon, items:items }); };
 
   var requests = DB.requests.search(q).slice(0,6).map(function(r) {
-    return { name: r.clientName || 'Unknown', line2: r.property || r.description || '', line3: r.phone || '', status: r.status, onclick: "RequestsPage.showDetail('" + r.id + "')" };
+    return { name: r.clientName || 'Unknown', line2: r.property || r.description || '', line3: r.phone || '', status: r.status, onclick: "RequestsPage._pendingDetail='" + r.id + "';loadPage('requests')" };
   });
   addGroup('Requests', '📥', requests);
 
   var quotes = DB.quotes.search(q).slice(0,6).map(function(qr) {
-    return { name: (qr.clientName || ''), num: qr.quoteNumber ? '#' + qr.quoteNumber : '', line2: qr.description || (qr.lineItems && qr.lineItems[0] && qr.lineItems[0].name) || '', status: qr.status, onclick: "QuotesPage.showDetail('" + qr.id + "')", amount: qr.total };
+    return { name: (qr.clientName || ''), num: qr.quoteNumber ? '#' + qr.quoteNumber : '', line2: qr.description || (qr.lineItems && qr.lineItems[0] && qr.lineItems[0].name) || '', status: qr.status, onclick: "QuotesPage._pendingDetail='" + qr.id + "';loadPage('quotes')", amount: qr.total };
   });
   addGroup('Quotes', '📋', quotes);
 
   var jobs = DB.jobs.search(q).slice(0,6).map(function(j) {
-    return { name: j.clientName || '', num: j.jobNumber ? '#' + j.jobNumber : '', line2: j.description || j.title || '', line3: j.property || '', status: j.status, onclick: "JobsPage.showDetail('" + j.id + "')", amount: j.total };
+    return { name: j.clientName || '', num: j.jobNumber ? '#' + j.jobNumber : '', line2: j.description || j.title || '', line3: j.property || '', status: j.status, onclick: "JobsPage._pendingDetail='" + j.id + "';loadPage('jobs')", amount: j.total };
   });
   addGroup('Jobs', '🔧', jobs);
 
   var invoices = DB.invoices.search(q).slice(0,4).map(function(i) {
-    return { name: i.clientName || '', num: i.invoiceNumber ? '#' + i.invoiceNumber : '', line2: i.subject || '', status: i.status, onclick: "InvoicesPage.showDetail('" + i.id + "')", amount: i.total };
+    return { name: i.clientName || '', num: i.invoiceNumber ? '#' + i.invoiceNumber : '', line2: i.subject || '', status: i.status, onclick: "InvoicesPage._pendingDetail='" + i.id + "';loadPage('invoices')", amount: i.total };
   });
   addGroup('Invoices', '💰', invoices);
 
   var clients = DB.clients.search(q).slice(0,5).map(function(c) {
-    return { name: c.name, line2: [c.address, c.city].filter(Boolean).join(', '), line3: c.phone || c.email || '', status: c.status, onclick: "ClientsPage.showDetail('" + c.id + "')" };
+    return { name: c.name, line2: [c.address, c.city].filter(Boolean).join(', '), line3: c.phone || c.email || '', status: c.status, onclick: "ClientsPage._pendingDetail='" + c.id + "';loadPage('clients')" };
   });
   addGroup('Clients', '👥', clients);
 
@@ -1173,7 +1299,7 @@ function _renderSearchResults(q) {
 
   // View all link
   var qSafe = q.replace(/'/g,"\\'");
-  html += '<div onclick="_closeSearch();currentPage=\'search\';document.querySelectorAll(\'.nav-item\').forEach(function(b){b.classList.remove(\'active\')});document.getElementById(\'pageTitle\').textContent=\'Search\';document.getElementById(\'pageAction\').style.display=\'none\';document.getElementById(\'pageContent\').innerHTML=SearchPage.render(\'' + qSafe + '\');" '
+  html += '<div onclick="_closeSearch();loadPage(\'search\');setTimeout(function(){var el=document.getElementById(\'search-page-input\');if(el){el.value=\'' + qSafe + '\';SearchPage._onPageSearch(\'' + qSafe + '\');}},100);" '
     + 'style="padding:12px 14px;text-align:center;font-size:13px;color:var(--accent);font-weight:700;cursor:pointer;border-top:2px solid var(--border);" '
     + 'onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'">See all ' + totalResults + ' results for "' + UI.esc(q) + '" →</div>';
 
@@ -1302,21 +1428,43 @@ document.addEventListener('click', function(e) {
 // ── Quick Create ──
 var QuickCreate = {
   show: function() {
+    var btnStyle = 'width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;min-height:52px;';
     var html = '<div style="display:grid;gap:8px;">'
-      + '<button class="btn btn-outline" style="width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;" onclick="UI.closeModal();ClientsPage.showForm()"><span style="font-size:20px;">👥</span> New Client</button>'
-      + '<button class="btn btn-outline" style="width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;" onclick="UI.closeModal();RequestsPage.showForm()"><span style="font-size:20px;">📥</span> New Request</button>'
-      + '<button class="btn btn-outline" style="width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;" onclick="UI.closeModal();QuotesPage.showForm()"><span style="font-size:20px;">📋</span> New Quote</button>'
-      + '<button class="btn btn-outline" style="width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;" onclick="UI.closeModal();JobsPage.showForm()"><span style="font-size:20px;">🔧</span> New Job</button>'
-      + '<button class="btn btn-outline" style="width:100%;padding:14px;font-size:15px;justify-content:flex-start;gap:12px;" onclick="UI.closeModal();Estimator.show()"><span style="font-size:20px;">🧮</span> Quick Estimate</button>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();ClientsPage.showForm()"><i data-lucide="user-plus" style="width:20px;height:20px;"></i> New Client</button>'
+      + '<div style="height:1px;background:var(--border);margin:4px 0;"></div>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();RequestsPage.showForm()"><i data-lucide="inbox" style="width:20px;height:20px;"></i> New Request</button>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();QuotesPage.showForm()"><i data-lucide="file-text" style="width:20px;height:20px;"></i> New Quote</button>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();JobsPage.showForm()"><i data-lucide="wrench" style="width:20px;height:20px;"></i> New Job</button>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();InvoicesPage.showForm()"><i data-lucide="receipt" style="width:20px;height:20px;"></i> New Invoice</button>'
+      + '<div style="height:1px;background:var(--border);margin:4px 0;"></div>'
+      + '<button class="btn btn-outline" style="' + btnStyle + '" onclick="UI.closeModal();loadPage(\'calculators\')"><i data-lucide="calculator" style="width:20px;height:20px;"></i> Quick Estimate</button>'
       + '</div>';
     UI.showModal('Create New', html);
-    if (window.innerWidth <= 768) toggleSidebar();
-  }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+  },
+
+  // vCard import moved inside the New Client form (see ClientsPage._importVCard)
 };
 
 // ── Init ──
 if (checkAuth()) {
-  loadPage('dashboard');
+  // Role-based default page
+  var hashPage = window.location.hash ? window.location.hash.slice(1) : '';
+  // Mode selector — show on first use or if no mode set
+  var appMode = ModeSelector.getMode();
+  var defaultPage = 'dashboard';
+  if (!appMode && Auth.role === 'owner') {
+    defaultPage = 'modeselector';
+  } else if (appMode === 'crew' || Auth.role === 'crew_member') {
+    defaultPage = 'crewview';
+  } else if (appMode === 'sales') {
+    defaultPage = 'requests';
+  } else if (Auth.role === 'crew_lead') {
+    defaultPage = 'dispatch';
+  }
+  if (appMode) ModeSelector._applySidebar(appMode);
+  loadPage((hashPage && pageRenderers[hashPage]) ? hashPage : defaultPage);
   // Show compliance popup after a short delay so the page settles first
   setTimeout(function() {
     if (typeof Reminders !== 'undefined') Reminders.checkLoginPopup();
@@ -1325,7 +1473,38 @@ if (checkAuth()) {
 
 // ── Service Worker ──
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(function(e) { console.log('SW:', e); });
+  // Emergency reset: visit /?reset=1 to nuke SW + caches and reload clean
+  if (/[?&]reset=/.test(location.search)) {
+    (async function() {
+      try {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < regs.length; i++) { await regs[i].unregister(); }
+        var keys = await caches.keys();
+        for (var j = 0; j < keys.length; j++) { await caches.delete(keys[j]); }
+        alert('Cache cleared. Reloading…');
+        location.replace(location.pathname);
+      } catch(e) { alert('Reset error: ' + e.message); }
+    })();
+  } else {
+    navigator.serviceWorker.register('sw.js').then(function(reg) {
+      // Check for SW update every time page loads
+      reg.update();
+      // If new SW waiting, activate it immediately
+      if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+      reg.addEventListener('updatefound', function() {
+        var newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New SW is ready — force reload to activate it
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+              setTimeout(function() { location.reload(); }, 500);
+            }
+          });
+        }
+      });
+    }).catch(function(e) { console.log('SW:', e); });
+  }
 }
 
 // ── PWA Install Prompt ──
@@ -1380,17 +1559,12 @@ if ('serviceWorker' in navigator) {
   };
 })();
 
-// Update bottom nav active state
+// Wrap loadPage to update sidebar active state
 var origLoadPage = window.loadPage;
 var _loadPageWrapped = function(page) {
   currentPage = page;
   origLoadPage(page);
-  // Update sidebar active state
   document.querySelectorAll('.nav-item').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.page === page);
-  });
-  // Update bottom nav active state
-  document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.page === page);
   });
 };
@@ -1404,13 +1578,14 @@ function toggleDarkMode() {
   var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
   localStorage.setItem('bm-dark-mode', isDark ? '' : 'dark');
-  var btn = document.getElementById('dark-mode-btn');
-  if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+  var icon = document.getElementById('dark-mode-icon');
+  if (icon) icon.setAttribute('data-lucide', isDark ? 'moon' : 'sun');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 // Restore on load
 if (localStorage.getItem('bm-dark-mode') === 'dark') {
   document.documentElement.setAttribute('data-theme', 'dark');
-  setTimeout(function() { var btn = document.getElementById('dark-mode-btn'); if (btn) btn.textContent = '☀️'; }, 100);
+  setTimeout(function() { var icon = document.getElementById('dark-mode-icon'); if (icon) icon.setAttribute('data-lucide', 'sun'); if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 }
 
 // ── Keyboard Shortcuts ──
@@ -1457,58 +1632,7 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 
-<!-- Mobile Bottom Nav (Jobber-style: Home, Schedule, +New, Clients, More) -->
-<nav class="bottom-nav">
-  <div class="bottom-nav-inner">
-    <button class="bottom-nav-btn active" data-page="dashboard" onclick="loadPage('dashboard')">
-      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
-    </button>
-    <button class="bottom-nav-btn" data-page="schedule" onclick="loadPage('schedule')">
-      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedule
-    </button>
-    <button class="bottom-nav-btn" onclick="QuickCreate.show()" style="position:relative;">
-      <span class="bnav-icon" style="background:var(--accent);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:-8px auto 0;">+</span>New
-    </button>
-    <button class="bottom-nav-btn" onclick="if(typeof _openMobileSearch==='function'){_openMobileSearch();_showRecents();}else{document.getElementById('globalSearch').focus();window.scrollTo(0,0);}">
-      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search
-    </button>
-    <button class="bottom-nav-btn" onclick="document.getElementById('mobile-more-menu').style.display=document.getElementById('mobile-more-menu').style.display==='block'?'none':'block'">
-      <svg class="bnav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>More
-    </button>
-  </div>
-  <!-- Mobile More Menu (slides up like Jobber) -->
-  <div id="mobile-more-menu" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:var(--white);border-top:1px solid var(--border);box-shadow:0 -8px 30px rgba(0,0,0,.12);border-radius:16px 16px 0 0;padding:16px;max-height:60vh;overflow-y:auto;">
-    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;"></div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;">
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('requests')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">📥</div><div style="font-size:11px;font-weight:600;color:var(--text);">Requests</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('quotes')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">📋</div><div style="font-size:11px;font-weight:600;color:var(--text);">Quotes</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('jobs')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">🔧</div><div style="font-size:11px;font-weight:600;color:var(--text);">Jobs</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('invoices')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">💰</div><div style="font-size:11px;font-weight:600;color:var(--text);">Invoices</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('pipeline')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">📊</div><div style="font-size:11px;font-weight:600;color:var(--text);">Pipeline</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('timesheet')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">⏱</div><div style="font-size:11px;font-weight:600;color:var(--text);">Timesheets</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('expenses')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">💸</div><div style="font-size:11px;font-weight:600;color:var(--text);">Expenses</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('insights')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">📈</div><div style="font-size:11px;font-weight:600;color:var(--text);">Reporting</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('team')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">👷</div><div style="font-size:11px;font-weight:600;color:var(--text);">Team</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('notifications')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">🔔</div><div style="font-size:11px;font-weight:600;color:var(--text);">Activity</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('messaging')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">💬</div><div style="font-size:11px;font-weight:600;color:var(--text);">Messages</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('ai')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">🤖</div><div style="font-size:11px;font-weight:600;color:var(--text);">Claude AI</div></button>
-      <button onclick="document.getElementById('mobile-more-menu').style.display='none';loadPage('settings')" style="background:none;border:none;padding:12px 4px;cursor:pointer;border-radius:12px;">
-        <div style="font-size:24px;margin-bottom:4px;">⚙️</div><div style="font-size:11px;font-weight:600;color:var(--text);">Settings</div></button>
-    </div>
-  </div>
-</nav>
+<!-- Bottom nav removed — using sidebar on all viewports -->
 <script>
 /* ── Notification Center Dropdown ── */
 var NotifCenter = (function() {
@@ -1679,7 +1803,11 @@ var NotifCenter = (function() {
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
         var isRead = readIds.indexOf(item.id) >= 0;
-        html += '<div class="notif-dropdown-item' + (isRead ? '' : ' unread') + '" onclick="NotifCenter.clickItem(\'' + item.page + '\',\'' + item.recordId + '\',\'' + item.id + '\')">'
+        // Safely encode IDs so quotes/backslashes in data don't break the onclick
+        var safePage = String(item.page || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var safeRecordId = String(item.recordId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var safeId = String(item.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        html += '<div class="notif-dropdown-item' + (isRead ? '' : ' unread') + '" onclick="NotifCenter.clickItem(\'' + safePage + '\',\'' + safeRecordId + '\',\'' + safeId + '\')">'
           + '<div class="notif-dropdown-icon" style="background:' + item.iconBg + ';">' + item.icon + '</div>'
           + '<div class="notif-dropdown-body">'
           + '<p class="notif-dropdown-msg">' + item.msg + '</p>'
@@ -1825,6 +1953,18 @@ if (localStorage.getItem('bm-sidebar-collapsed') === 'true') {
   document.getElementById('sidebar').classList.add('collapsed');
   var tb = document.getElementById('sidebar-toggle-btn');
   if (tb) tb.textContent = '▶';
+}
+// Browser back/forward button support
+window.addEventListener('popstate', function(e) {
+  var page = (e.state && e.state.page) || (window.location.hash ? window.location.hash.slice(1) : 'dashboard');
+  if (page && typeof loadPage === 'function') loadPage(page);
+});
+// Load page from URL hash on initial load
+if (window.location.hash && window.location.hash.length > 1) {
+  var hashPage = window.location.hash.slice(1);
+  if (typeof loadPage === 'function' && typeof pageRenderers !== 'undefined' && pageRenderers[hashPage]) {
+    setTimeout(function() { loadPage(hashPage); }, 100);
+  }
 }
 </script>
 </body>

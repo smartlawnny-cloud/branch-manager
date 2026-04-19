@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quote Approval — Second Nature Tree Service</title>
+  <title>Quote Approval</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f0; color: #1d1d1f; min-height: 100vh; }
@@ -76,6 +76,7 @@
     </div>
   </div>
 
+  <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
     var SUPABASE_URL = 'https://ltpivkqahvplapyagljt.supabase.co';
@@ -84,6 +85,7 @@
 
     var params = new URLSearchParams(window.location.search);
     var quoteId = params.get('id');
+    var urlToken = params.get('token');
 
     function el(id) { return document.getElementById(id); }
     function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -95,7 +97,13 @@
       try {
         var result = await sb.from('quotes').select('*').eq('id', quoteId).single();
         if (result.error) throw result.error;
-        renderQuote(result.data);
+        // Validate approval token if one exists on the quote
+        var q = result.data;
+        if (!q.approval_token || urlToken !== q.approval_token) {
+          showError('This link has expired or is invalid. Please request a new quote link.');
+          return;
+        }
+        renderQuote(q);
       } catch(e) {
         showError('Quote not found. The link may be expired or incorrect.<br><br>Please contact us and we\'ll resend it.');
       }
@@ -175,8 +183,14 @@
           + '<div class="section-label">Full Name</div>'
           + '<input type="text" id="sig-name" placeholder="Type your full name" style="width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-family:inherit;margin-top:4px;">'
           + '</div>'
-          + '<div class="sig-legal">By signing and clicking Confirm, you agree to the quote terms and authorize Second Nature Tree Service to perform the described work at the stated price.</div>'
-          + '<button class="btn btn-approve" style="margin-top:12px;" onclick="confirmApprove()">✅ Confirm &amp; Approve</button>'
+          + '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer;">'
+          + '<input type="checkbox" id="sig-consent" style="width:18px;height:18px;flex-shrink:0;margin-top:2px;">'
+          + '<span style="font-size:12px;color:#666;line-height:1.5;">I consent to signing this document electronically. I acknowledge that my electronic signature has the same legal effect as a handwritten signature under the federal ESIGN Act and ' + esc(BM_CONFIG.state) + ' ESRA. I have reviewed and agree to the scope of work, pricing, and terms described in this quote.</span>'
+          + '</label>'
+          + '<div style="display:flex;gap:8px;margin-top:12px;">'
+          + '<button class="btn btn-approve" style="flex:1;" onclick="confirmApprove()">✅ Confirm &amp; Approve</button>'
+          + '<button class="btn" style="padding:10px 16px;background:#f5f5f5;color:#333;border:1px solid #ddd;" onclick="cancelSignature()">Cancel</button>'
+          + '</div>'
           + '</div>'
           + '<button class="btn btn-changes" onclick="toggleChanges()">💬 Request Changes</button>'
           + '<div class="changes-form" id="changes-form">'
@@ -204,7 +218,7 @@
 
       el('app').innerHTML = ''
         + '<div class="header">'
-        + '<div class="header-logo">🌳 Second Nature Tree Service</div>'
+        + '<div class="header-logo">🌳 ' + esc(BM_CONFIG.companyName) + '</div>'
         + '<h1>Quote #' + esc(q.quote_number || '') + '</h1>'
         + '<div class="header-status">' + statusBadge + '</div>'
         + '</div>'
@@ -217,7 +231,14 @@
         + '<div><div class="section-label">Valid Until</div><div class="meta-val">' + expiryMeta + '</div></div>'
         + '</div>'
         + (q.description ? '<div class="desc-box">' + esc(q.description).replace(/\n/g,'<br>') + '</div>' : '')
-        + (q.videoUrl || q.video_url ? '<div style="margin-bottom:20px;"><div class="section-label">Property Walkthrough</div><div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;"><iframe src="' + (q.videoUrl || q.video_url).replace('watch?v=','embed/').replace('youtu.be/','youtube.com/embed/') + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div></div>' : '')
+        + (function() {
+          var vUrl = q.videoUrl || q.video_url;
+          if (!vUrl) return '';
+          // Only allow YouTube URLs for security
+          var safeUrl = vUrl.replace('watch?v=','embed/').replace('youtu.be/','youtube.com/embed/');
+          if (!safeUrl.match(/^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//)) return '';
+          return '<div style="margin-bottom:20px;"><div class="section-label">Property Walkthrough</div><div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:8px;"><iframe src="' + esc(safeUrl) + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div></div>';
+        })()
         + '<div class="section-label">Services</div>'
         + '<table class="line-table"><thead><tr><th>Service</th><th>Description</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead>'
         + '<tbody>' + lineRows + '</tbody>'
@@ -229,7 +250,7 @@
         + '</table>'
         + actionHtml
         + '</div>'
-        + '<div class="footer">Questions? <a href="tel:9143915233">📞 (914) 391-5233</a> · <a href="mailto:info@peekskilltree.com">info@peekskilltree.com</a></div>';
+        + '<div class="footer">Questions? <a href="tel:' + BM_CONFIG.phoneDigits + '">📞 ' + esc(BM_CONFIG.phone) + '</a> · <a href="mailto:' + esc(BM_CONFIG.email) + '">' + esc(BM_CONFIG.email) + '</a></div>';
 
       // Store quote data for button handlers
       window._quoteId = q.id;
@@ -281,6 +302,20 @@
       canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    function cancelSignature() {
+      // Hide the signature pad, show the main Approve button again
+      var sec = el('sig-section');
+      if (sec) sec.style.display = 'none';
+      var mainBtn = el('btn-approve-main');
+      if (mainBtn) mainBtn.style.display = '';
+      // Clear any drawing
+      clearSignature();
+      var nameInput = el('sig-name');
+      if (nameInput) nameInput.value = '';
+      var consent = el('sig-consent');
+      if (consent) consent.checked = false;
+    }
+
     function _sigIsEmpty() {
       var canvas = el('sig-canvas');
       if (!canvas) return true;
@@ -293,16 +328,33 @@
       var name = (el('sig-name') ? el('sig-name').value.trim() : '');
       if (!name) { alert('Please type your full name to confirm.'); return; }
       if (_sigIsEmpty()) { alert('Please draw your signature above.'); return; }
+      var consentBox = document.getElementById('sig-consent');
+      if (consentBox && !consentBox.checked) { alert('Please check the consent box to proceed.'); return; }
 
       var canvas = el('sig-canvas');
       var sigData = canvas ? canvas.toDataURL('image/png') : '';
       var btn = document.querySelector('#sig-section .btn-approve');
       if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; btn.className = 'btn btn-disabled'; }
 
+      // Audit trail: IP, user agent, document hash, quote snapshot
+      var signedIP = '';
+      try { var ipRes = await fetch('https://api.ipify.org?format=json'); var ipData = await ipRes.json(); signedIP = ipData.ip || ''; } catch(e) {}
+      var signedUA = navigator.userAgent || '';
+      var q = window._quoteData || {};
+      var quoteSnapshot = JSON.stringify({ description: q.description, line_items: q.line_items, total: q.total, tax_rate: q.tax_rate, terms: 'standard', property: q.property });
+      var hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(quoteSnapshot));
+      var hashArray = Array.from(new Uint8Array(hashBuffer));
+      var quoteHash = hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+
       try {
         var now = new Date().toISOString();
         var result = await sb.from('quotes')
-          .update({ status: 'approved', updated_at: now, client_signature: sigData, signed_name: name, signed_at: now })
+          .update({
+            status: 'approved', updated_at: now,
+            client_signature: sigData, signed_name: name, signed_at: now,
+            signed_ip: signedIP, signed_user_agent: signedUA,
+            signed_quote_hash: quoteHash, signed_quote_snapshot: quoteSnapshot
+          })
           .eq('id', window._quoteId);
         if (result.error) throw result.error;
 
@@ -323,7 +375,7 @@
 
         el('app').innerHTML = ''
           + '<div class="header" style="border-radius:12px;">'
-          + '<div class="header-logo">🌳 Second Nature Tree Service</div>'
+          + '<div class="header-logo">🌳 ' + esc(BM_CONFIG.companyName) + '</div>'
           + '<h1>Quote Approved!</h1>'
           + '</div>'
           + '<div class="card card-standalone" style="border-radius:0 0 12px 12px;">'
@@ -331,12 +383,12 @@
           + '<div class="success-icon">🌳</div>'
           + '<h2>Thank You, ' + esc(name.split(' ')[0]) + '!</h2>'
           + '<p>Your quote has been approved and your signature has been saved. We\'ll reach out shortly to confirm your scheduled date.</p>'
-          + '<p style="margin-top:20px;"><a href="tel:9143915233" style="color:#1a3c12;font-weight:700;text-decoration:none;font-size:16px;">📞 (914) 391-5233</a></p>'
+          + '<p style="margin-top:20px;"><a href="tel:' + BM_CONFIG.phoneDigits + '" style="color:#1a3c12;font-weight:700;text-decoration:none;font-size:16px;">📞 ' + esc(BM_CONFIG.phone) + '</a></p>'
           + '</div>'
           + '</div>'
-          + '<div class="footer"><a href="https://peekskilltree.com">peekskilltree.com</a></div>';
+          + '<div class="footer"><a href="' + esc(BM_CONFIG.websiteUrl) + '">' + esc(BM_CONFIG.website) + '</a></div>';
       } catch(e) {
-        alert('Could not save approval. Please call (914) 391-5233 or email info@peekskilltree.com.');
+        alert('Could not save approval. Please call ' + BM_CONFIG.phone + ' or email ' + BM_CONFIG.email + '.');
         if (btn) { btn.textContent = '✅ Confirm & Approve'; btn.disabled = false; btn.className = 'btn btn-approve'; }
       }
     }
@@ -377,7 +429,7 @@
 
         el('app').innerHTML = ''
           + '<div class="header" style="border-radius:12px;">'
-          + '<div class="header-logo">🌳 Second Nature Tree Service</div>'
+          + '<div class="header-logo">🌳 ' + esc(BM_CONFIG.companyName) + '</div>'
           + '<h1>Changes Requested</h1>'
           + '</div>'
           + '<div class="card card-standalone" style="border-radius:0 0 12px 12px;">'
@@ -385,12 +437,12 @@
           + '<div class="success-icon">💬</div>'
           + '<h2>Got It!</h2>'
           + '<p>We\'ll update the quote and send you a revised version. If you need to speak with us directly:</p>'
-          + '<p style="margin-top:20px;"><a href="tel:9143915233" style="color:#1a3c12;font-weight:700;text-decoration:none;font-size:16px;">📞 (914) 391-5233</a></p>'
+          + '<p style="margin-top:20px;"><a href="tel:' + BM_CONFIG.phoneDigits + '" style="color:#1a3c12;font-weight:700;text-decoration:none;font-size:16px;">📞 ' + esc(BM_CONFIG.phone) + '</a></p>'
           + '</div>'
           + '</div>'
-          + '<div class="footer"><a href="https://peekskilltree.com">peekskilltree.com</a></div>';
+          + '<div class="footer"><a href="' + esc(BM_CONFIG.websiteUrl) + '">' + esc(BM_CONFIG.website) + '</a></div>';
       } catch(e) {
-        alert('Could not send request. Please call (914) 391-5233.');
+        alert('Could not send request. Please call ' + BM_CONFIG.phone + '.');
         if (btn) { btn.textContent = 'Send Request'; btn.disabled = false; }
       }
     }
@@ -400,12 +452,13 @@
         + '<div class="error-card">'
         + '<div style="font-size:40px;margin-bottom:16px;">⚠️</div>'
         + '<h2 style="margin-bottom:8px;">Link Not Found</h2>'
-        + '<p style="color:#666;" id="err-msg">' + msg + '</p>'
-        + '<p style="margin-top:20px;"><a href="tel:9143915233" style="color:#1a3c12;font-weight:700;text-decoration:none;">📞 (914) 391-5233</a></p>'
+        + '<p style="color:#666;" id="err-msg">' + esc(msg).replace(/&lt;br&gt;/g, '<br>') + '</p>'
+        + '<p style="margin-top:20px;"><a href="tel:' + BM_CONFIG.phoneDigits + '" style="color:#1a3c12;font-weight:700;text-decoration:none;">📞 ' + BM_CONFIG.phone + '</a></p>'
         + '</div></div>'
-        + '<div class="footer"><a href="https://peekskilltree.com">peekskilltree.com</a></div>';
+        + '<div class="footer"><a href="' + BM_CONFIG.websiteUrl + '">' + BM_CONFIG.website + '</a></div>';
     }
 
+    document.title = 'Quote Approval — ' + BM_CONFIG.companyName;
     window.addEventListener('load', loadQuote);
   </script>
 </body>

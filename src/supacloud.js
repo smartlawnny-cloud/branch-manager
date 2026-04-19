@@ -20,11 +20,21 @@ var CloudSync = {
 
     for (var i = 0; i < CloudSync.tables.length; i++) {
       var table = CloudSync.tables[i];
-      var localKey = 'bm-' + table.replace('_', '-');
+      var localKey = 'bm-' + table.replace(/_/g, '-');
 
       try {
         // Pull all rows from Supabase
-        var { data, error } = await sb.from(table).select('*').order('created_at', { ascending: false }).limit(1000);
+        // Paginate: fetch up to 5000 rows in batches of 1000
+        var allData = [];
+        var page = 0;
+        var hasMore = true;
+        while (hasMore && page < 5) {
+          var { data: batch, error } = await sb.from(table).select('*').order('created_at', { ascending: false }).range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) break;
+          if (batch && batch.length > 0) { allData = allData.concat(batch); page++; }
+          if (!batch || batch.length < 1000) hasMore = false;
+        }
+        var data = allData;
         if (error) {
           // Table doesn't exist in Supabase yet — remove from sync list silently
           if (error.message && error.message.includes('schema cache')) {
@@ -48,7 +58,7 @@ var CloudSync = {
 
           localStorage.setItem(localKey, JSON.stringify(converted));
           totalRows += converted.length;
-          console.log('CloudSync: loaded ' + converted.length + ' ' + table);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB._debug) console.log('CloudSync: loaded ' + converted.length + ' ' + table);
         }
       } catch (e) {
         console.warn('CloudSync: failed ' + table + ':', e);
@@ -57,7 +67,7 @@ var CloudSync = {
 
     CloudSync.syncing = false;
     CloudSync.lastSync = Date.now();
-    console.log('CloudSync: done — ' + totalRows + ' total rows cached');
+    if (typeof SupabaseDB !== 'undefined' && SupabaseDB._debug) console.log('CloudSync: done — ' + totalRows + ' total rows cached');
 
     // Refresh page if we loaded new data
     if (totalRows > 0 && typeof loadPage === 'function') {
@@ -71,7 +81,7 @@ var CloudSync = {
     var sb = SupabaseDB.client;
 
     CloudSync.tables.forEach(function(table) {
-      var localKey = 'bm-' + table.replace('_', '-');
+      var localKey = 'bm-' + table.replace(/_/g, '-');
       var dbSection = table === 'time_entries' ? DB.timeEntries : DB[table];
       if (!dbSection) return;
 
@@ -89,8 +99,11 @@ var CloudSync = {
         var cloudRecord = CloudSync._toSnake(result);
         // ID is already a UUID — no need to overwrite
         sb.from(table).insert(cloudRecord).then(function(res) {
-          if (res.error) console.warn('Cloud create error (' + table + '):', res.error.message);
-        });
+          if (res.error) {
+            console.warn('Cloud create error (' + table + '):', res.error.message);
+            CloudSync._markUnsynced();
+          }
+        }).catch(function() { CloudSync._markUnsynced(); });
         return result;
       };
 
@@ -104,8 +117,8 @@ var CloudSync = {
           var record = all.find(function(r) { return r.id === id; });
           if (record && record.id) {
             sb.from(table).update(cloudChanges).eq('id', record.id).then(function(res) {
-              if (res.error) console.warn('Cloud update error (' + table + '):', res.error.message);
-            });
+              if (res.error) { console.warn('Cloud update error (' + table + '):', res.error.message); CloudSync._markUnsynced(); }
+            }).catch(function() { CloudSync._markUnsynced(); });
           }
           return result;
         };
@@ -116,14 +129,34 @@ var CloudSync = {
         dbSection.remove = function(id) {
           var result = origRemove.call(dbSection, id);
           sb.from(table).delete().eq('id', id).then(function(res) {
-            if (res.error) console.warn('Cloud delete error (' + table + '):', res.error.message);
-          });
+            if (res.error) { console.warn('Cloud delete error (' + table + '):', res.error.message); CloudSync._markUnsynced(); }
+          }).catch(function() { CloudSync._markUnsynced(); });
           return result;
         };
       }
     });
 
-    console.log('CloudSync: write methods wrapped');
+    if (typeof SupabaseDB !== 'undefined' && SupabaseDB._debug) console.log('CloudSync: write methods wrapped');
+  },
+
+  // Show unsynced indicator in topbar
+  _markUnsynced: function() {
+    var el = document.getElementById('sync-indicator');
+    if (!el) {
+      var topbar = document.querySelector('.topbar-actions');
+      if (topbar) {
+        var indicator = document.createElement('span');
+        indicator.id = 'sync-indicator';
+        indicator.title = 'Some changes not synced to cloud';
+        indicator.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;margin-right:4px;animation:pulse 2s infinite;';
+        topbar.insertBefore(indicator, topbar.firstChild);
+      }
+    }
+  },
+
+  _clearUnsynced: function() {
+    var el = document.getElementById('sync-indicator');
+    if (el) el.remove();
   },
 
   // Convert camelCase object to snake_case
@@ -137,8 +170,10 @@ var CloudSync = {
   },
 
   _uuid: function() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    // Fallback for older browsers
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      var r = Math.random() * 16 | 0;
+      var r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15);
       return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     });
   },
@@ -161,7 +196,7 @@ var CloudSync = {
       CloudSync.init().then(function() { CloudSync.wrapWrites(); });
     } else {
       CloudSync.wrapWrites();
-      console.log('CloudSync: using cached data (' + JSON.parse(localClients).length + ' clients)');
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB._debug) console.log('CloudSync: using cached data (' + JSON.parse(localClients).length + ' clients)');
     }
   } else if (attempts > 0) {
     setTimeout(function() { waitForSupabase(attempts - 1); }, 1000);

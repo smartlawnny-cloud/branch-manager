@@ -1,6 +1,11 @@
 // Branch Manager — Service Worker v9
 // Full offline support + push notifications
-var CACHE_NAME = 'branch-manager-v82';
+var CACHE_NAME = 'branch-manager-v154';
+
+// Allow the page to trigger immediate activation
+self.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'SKIP_WAITING') { self.skipWaiting(); }
+});
 var ASSETS = [
   './',
   './index.html',
@@ -55,6 +60,7 @@ var ASSETS = [
   './src/pages/backup.js',
   './src/pages/search.js',
   './src/pages/estimator.js',
+  './src/pages/aitreeid.js',
   './src/pages/treemeasure.js',
   './src/pages/propertymap.js',
   './src/pages/pdfgen.js',
@@ -73,12 +79,24 @@ var ASSETS = [
   './src/pages/materials.js',
   './src/pages/reminders.js',
   './src/pages/crewperformance.js',
-  './src/pages/pipeline.js',
+  './src/pages/campaigns.js',
+  './src/pages/formbuilder.js',
+  './src/pages/videoquote.js',
+  './src/pages/taskreminders.js',
+  './src/pages/modeselector.js',
+  './src/pages/teamchat.js',
+  './src/pages/mediacenter.js',
+  './src/pages/payroll.js',
+  './src/pages/permissions.js',
+  './src/pages/receptionist.js',
+  './src/pages/referrals.js',
+  './src/dialpad.js',
   // Icons
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   // Client-facing pages
+  './config.js',
   './approve.html',
   './pay.html',
   './client.html',

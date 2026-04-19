@@ -3,29 +3,54 @@
  */
 var JobsPage = {
   _page: 0, _perPage: 50, _search: '', _filter: 'all', _sortCol: 'jobNumber', _sortDir: 'desc',
+  _activeTab: 'jobs',
+
+  switchTab: function(tab) {
+    JobsPage._activeTab = tab;
+    loadPage('jobs');
+  },
 
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
+  _pendingDetail: null,
+
   render: function() {
     var self = JobsPage;
+    if (self._pendingDetail) {
+      var _pid = self._pendingDetail;
+      self._pendingDetail = null;
+      setTimeout(function() { JobsPage.showDetail(_pid); }, 50);
+    }
+    var activeTab = self._activeTab || 'jobs';
+
+    // Tab bar
+    var html = '<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px;">'
+      + '<button onclick="JobsPage.switchTab(\'jobs\')" style="padding:10px 20px;font-size:14px;font-weight:' + (activeTab==='jobs'?'700':'500') + ';border:none;background:none;cursor:pointer;color:' + (activeTab==='jobs'?'var(--accent)':'var(--text-light)') + ';border-bottom:2px solid ' + (activeTab==='jobs'?'var(--accent)':'transparent') + ';margin-bottom:-2px;">Jobs</button>'
+      + '<button onclick="JobsPage.switchTab(\'visits\')" style="padding:10px 20px;font-size:14px;font-weight:' + (activeTab==='visits'?'700':'500') + ';border:none;background:none;cursor:pointer;color:' + (activeTab==='visits'?'var(--accent)':'var(--text-light)') + ';border-bottom:2px solid ' + (activeTab==='visits'?'var(--accent)':'transparent') + ';margin-bottom:-2px;">Visits</button>'
+      + '</div>';
+
+    if (activeTab === 'visits') {
+      return html + Visits.render();
+    }
+
     var all = DB.jobs.getAll();
     var late = all.filter(function(j) { return j.status === 'late'; }).length;
     var scheduled = all.filter(function(j) { return j.status === 'scheduled'; }).length;
     var inProgress = all.filter(function(j) { return j.status === 'in_progress'; }).length;
     var completed = all.filter(function(j) { return j.status === 'completed'; }).length;
 
-    // Jobber-style stat cards row
+    // previous system-style stat cards row
     var activeJobs = all.filter(function(j) { return j.status === 'in_progress' || j.status === 'scheduled'; });
     var cutoff60 = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
     var cutoff7 = new Date(Date.now() - 7 * 86400000).toISOString();
-    // Recent = jobs with scheduledDate in last 60 days (excludes old Jobber imports)
+    // Recent = jobs with scheduledDate in last 60 days (excludes old previous system imports)
     var recentNeedsInvoicing = all.filter(function(j) {
       return j.status === 'completed' && !j.invoiceId
         && ((j.scheduledDate && j.scheduledDate >= cutoff60)
@@ -44,7 +69,7 @@ var JobsPage = {
     var activeTotal = activeJobs.reduce(function(s,j){return s+(j.total||0);},0);
     var upcomingTotal = upcomingVisits.reduce(function(s,j){return s+(j.total||0);},0);
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
       // Overview
       + '<div onclick="JobsPage._setFilter(\'all\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
       + '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Overview</div>'
@@ -88,18 +113,18 @@ var JobsPage = {
         + '<button onclick="JobsPage._batchInvoiceAll()" style="background:#fff;color:#2e7d32;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.15);">Create Invoices</button>'
         + '</div>';
     }
-    // Legacy Jobber jobs banner (dismissible)
+    // Legacy previous system jobs banner (dismissible)
     if (legacyNeedsInvoicing.length > 0) {
       html += '<div style="background:#f5f5f5;border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
-        + '<div style="font-size:13px;color:var(--text-light);">📦 <strong>' + legacyNeedsInvoicing.length + ' older Jobber jobs</strong> were already invoiced before migration — click to dismiss.</div>'
-        + '<button onclick="JobsPage._markAllLegacyInvoiced()" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Mark as Invoiced (Jobber)</button>'
+        + '<div style="font-size:13px;color:var(--text-light);">📦 <strong>' + legacyNeedsInvoicing.length + ' older previous system jobs</strong> were already invoiced before migration — click to dismiss.</div>'
+        + '<button onclick="JobsPage._markAllLegacyInvoiced()" style="background:var(--border);color:var(--text);border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Mark as Invoiced (previous system)</button>'
         + '</div>';
     }
 
     var filtered = self._getFiltered();
     var page = filtered.slice(self._page * self._perPage, (self._page + 1) * self._perPage);
 
-    // Jobber-style header + filter chips + search
+    // previous system-style header + filter chips + search
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
       + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
       + '<h3 style="font-size:16px;font-weight:700;margin:0;">All jobs</h3>'
@@ -121,7 +146,7 @@ var JobsPage = {
       + '</div></div>';
 
     // Floating batch action bar (fixed to bottom)
-    html += '<div id="job-bulk-bar" style="display:none;position:fixed;bottom:0;left:var(--sidebar-w,240px);right:0;z-index:500;background:#1a1a2e;color:#fff;padding:12px 24px;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:batchSlideUp .25s ease-out;">'
+    html += '<div id="job-bulk-bar" style="display:none;position:fixed;bottom:0;left:var(--sidebar-w,0);right:0;z-index:500;background:#1a1a2e;color:#fff;padding:12px 24px;padding-bottom:max(12px,env(safe-area-inset-bottom));align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:batchSlideUp .25s ease-out;">'
       + '<span id="job-bulk-count" style="font-weight:700;font-size:14px;">0 selected</span>'
       + '<div style="display:flex;gap:8px;align-items:center;">'
       + '<button onclick="JobsPage._batchComplete()" style="background:#2e7d32;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Mark Complete</button>'
@@ -229,6 +254,45 @@ var JobsPage = {
     if (bar) bar.style.display = selected.length > 0 ? 'flex' : 'none';
     if (count) count.textContent = selected.length + ' selected';
   },
+  _textCrew: function(id) {
+    var j = DB.jobs.getById(id);
+    if (!j || !j.crew || !j.crew.length) return;
+
+    // Look up crew phone numbers from team_members
+    var team = JSON.parse(localStorage.getItem('bm-team') || '[]');
+    var phones = [];
+    j.crew.forEach(function(name) {
+      var member = team.find(function(t) { return t.name === name; });
+      if (member && member.phone) phones.push(member.phone.replace(/\D/g, ''));
+    });
+
+    // Build the message with job details + clickable address
+    var addr = j.property || '';
+    var mapLink = addr ? 'https://maps.apple.com/?daddr=' + encodeURIComponent(addr) : '';
+    var jobLink = 'https://peekskilltree.com/branchmanager/#jobs';
+
+    var msg = 'Job #' + (j.jobNumber || '') + ' — ' + (j.clientName || '') + '\n'
+      + (j.description ? j.description + '\n' : '')
+      + (addr ? '\n📍 ' + addr + '\n' + mapLink + '\n' : '')
+      + '\nOpen in Branch Manager: ' + jobLink;
+
+    if (phones.length > 0) {
+      // Multi-recipient SMS
+      window.open('sms:' + phones.join(',') + '?&body=' + encodeURIComponent(msg));
+    } else {
+      // No phone numbers found — show the message to copy
+      UI.showModal('Text Crew', '<div style="padding:4px;">'
+        + '<p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">No phone numbers found for crew. Copy this message and send manually:</p>'
+        + '<textarea id="crew-msg" rows="8" style="width:100%;padding:10px;border:2px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' + UI.esc(msg) + '</textarea>'
+        + '<div style="display:flex;gap:8px;margin-top:8px;">'
+        + '<strong>Crew:</strong> ' + j.crew.join(', ')
+        + '</div></div>', {
+        footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Close</button>'
+          + ' <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById(\'crew-msg\').value);UI.toast(\'Copied!\')">Copy Message</button>'
+      });
+    }
+  },
+
   _requestReview: function(id) {
     var j = DB.jobs.getById(id);
     if (!j) return;
@@ -255,21 +319,70 @@ var JobsPage = {
       + '</div></div>'
       + '<div style="font-size:12px;color:var(--text-light);">Review link: <a href="' + reviewLink + '" target="_blank" style="color:var(--accent);">' + reviewLink + '</a></div>';
 
+    // Stash review context — onclick only passes the job id
+    JobsPage._reviewCtx = { jobId: id, phone: phone, email: email, emailSubject: emailSubject };
+
     UI.showModal('⭐ Request Google Review', html, {
       footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
-        + (phone ? ' <button class="btn btn-outline" onclick="(function(){var msg=document.getElementById(\'rv-sms\').value;if(typeof Dialpad!==\'undefined\'){Dialpad.showTextModal(\'' + phone.replace(/\D/g,'') + '\',msg);}else{window.open(\'sms:' + phone.replace(/\D/g,'') + '?body=\'+encodeURIComponent(msg));}DB.jobs.update(\'' + id + '\',{reviewRequestedAt:new Date().toISOString()});UI.closeModal();UI.toast(\'Review request sent via SMS ✅\');})()">📱 Send SMS</button>' : '')
-        + (email ? ' <button class="btn btn-primary" onclick="(function(){var body=document.getElementById(\'rv-email\').value;if(typeof Email!==\'undefined\'&&Email.isConfigured()){Email.send(\'' + email + '\',\'' + emailSubject + '\',body);}else{window.open(\'mailto:' + email + '?subject=\'+encodeURIComponent(\'' + emailSubject + '\')+ \'&body=\'+encodeURIComponent(body));}DB.jobs.update(\'' + id + '\',{reviewRequestedAt:new Date().toISOString()});UI.closeModal();UI.toast(\'Review request sent via email ✅\');})()">📧 Send Email</button>' : '')
+        + (phone ? ' <button class="btn btn-outline" onclick="JobsPage._sendReviewSMS()">📱 Send SMS</button>' : '')
+        + (email ? ' <button class="btn btn-primary" onclick="JobsPage._sendReviewEmail()">📧 Send Email</button>' : '')
     });
-    // Mark as review requested
-    DB.jobs.update(id, { reviewRequestedAt: new Date().toISOString() });
+  },
+
+  _showPropertyMap: function(jobId) {
+    var j = DB.jobs.getById(jobId);
+    if (!j) return;
+    if (typeof PropertyMap !== 'undefined' && PropertyMap.show) PropertyMap.show(j.property || '');
+    else UI.toast('Property map not available', 'error');
+  },
+
+  _sendReviewSMS: function() {
+    var ctx = JobsPage._reviewCtx;
+    if (!ctx) return;
+    var msg = (document.getElementById('rv-sms') || {}).value || '';
+    var phoneClean = (ctx.phone || '').replace(/\D/g, '');
+    if (typeof Dialpad !== 'undefined' && Dialpad.showTextModal) {
+      Dialpad.showTextModal(phoneClean, msg);
+    } else {
+      window.open('sms:' + phoneClean + '?body=' + encodeURIComponent(msg));
+    }
+    DB.jobs.update(ctx.jobId, { reviewRequestedAt: new Date().toISOString() });
+    UI.closeModal();
+    UI.toast('Review request sent via SMS ✅');
+  },
+
+  _sendReviewEmail: function() {
+    var ctx = JobsPage._reviewCtx;
+    if (!ctx) return;
+    var body = (document.getElementById('rv-email') || {}).value || '';
+    if (typeof Email !== 'undefined' && Email.isConfigured && Email.isConfigured()) {
+      Email.send(ctx.email, ctx.emailSubject, body);
+    } else {
+      window.open('mailto:' + encodeURIComponent(ctx.email) + '?subject=' + encodeURIComponent(ctx.emailSubject) + '&body=' + encodeURIComponent(body));
+    }
+    DB.jobs.update(ctx.jobId, { reviewRequestedAt: new Date().toISOString() });
+    UI.closeModal();
+    UI.toast('Review request sent via email ✅');
   },
 
   _quickComplete: function(id) {
     var j = DB.jobs.getById(id);
     if (!j) return;
     DB.jobs.update(id, { status: 'completed', completedAt: new Date().toISOString() });
-    UI.toast('Job #' + j.jobNumber + ' marked complete');
-    loadPage('jobs');
+
+    // previous system-style: prompt to create invoice after completing a job
+    if (!j.invoiceId && j.total > 0) {
+      UI.confirm('Job #' + j.jobNumber + ' complete! Create invoice for ' + UI.money(j.total) + '?', function() {
+        if (typeof Workflow !== 'undefined') {
+          var inv = Workflow.jobToInvoice(id);
+          if (inv) { UI.toast('✅ Invoice #' + inv.invoiceNumber + ' created'); loadPage('invoices'); return; }
+        }
+        loadPage('jobs');
+      }, function() { UI.toast('Job completed'); loadPage('jobs'); });
+    } else {
+      UI.toast('Job #' + j.jobNumber + ' marked complete');
+      loadPage('jobs');
+    }
   },
   _batchComplete: function() {
     var ids = Array.from(document.querySelectorAll('.job-check:checked')).map(function(cb) { return cb.value; });
@@ -296,7 +409,7 @@ var JobsPage = {
   },
   _markAllLegacyInvoiced: function() {
     var needsInvoicing = DB.jobs.getAll().filter(function(j) { return j.status === 'completed' && !j.invoiceId; });
-    UI.confirm('Mark all ' + needsInvoicing.length + ' completed jobs as already invoiced in Jobber? This clears the banner — no new invoices will be created.', function() {
+    UI.confirm('Mark all ' + needsInvoicing.length + ' completed jobs as already invoiced in previous system? This clears the banner — no new invoices will be created.', function() {
       needsInvoicing.forEach(function(j) { DB.jobs.update(j.id, { invoiceId: 'legacy' }); });
       UI.toast(needsInvoicing.length + ' jobs marked as legacy-invoiced');
       loadPage('jobs');
@@ -452,7 +565,7 @@ var JobsPage = {
     var team = [];
     try { team = JSON.parse(localStorage.getItem('bm-team') || '[]'); } catch(e) {}
 
-    // Time slots (Jobber style - 30 min increments)
+    // Time slots (previous system style - 30 min increments)
     var timeSlots = [];
     for (var h = 6; h <= 18; h++) {
       for (var m = 0; m < 60; m += 30) {
@@ -469,14 +582,14 @@ var JobsPage = {
       + UI.formField('Property Address', 'text', 'j-property', j.property, { placeholder: 'Job site address' })
       + UI.formField('Description', 'text', 'j-description', j.description, { placeholder: 'e.g., Remove 2 dead oaks' })
 
-      // Date + Time (Jobber style)
+      // Date + Time (previous system style)
       + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'
       + UI.formField('Date *', 'date', 'j-date', (j.scheduledDate ? j.scheduledDate.split('T')[0] : '') || opts.date || '')
       + UI.formField('Start Time', 'select', 'j-starttime', j.startTime || '08:00', { options: [{ value: '', label: 'Anytime' }].concat(timeSlots) })
       + UI.formField('End Time', 'select', 'j-endtime', j.endTime || '', { options: [{ value: '', label: 'Open' }].concat(timeSlots) })
       + '</div>'
 
-      // Arrival window (Jobber style)
+      // Arrival window (previous system style)
       + '<div style="margin-bottom:12px;">'
       + '<label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Arrival Window</label>'
       + '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
@@ -511,23 +624,35 @@ var JobsPage = {
       + UI.formField('Notes', 'textarea', 'j-notes', j.notes, { placeholder: 'Job notes, special instructions...' })
       + '</form>';
 
-    UI.showModal(jobId ? 'Edit Job #' + j.jobNumber : 'New Job', html, {
-      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
-        + ' <button class="btn btn-primary" onclick="document.getElementById(\'job-form\').requestSubmit()">Save Job</button>'
-    });
+    // Render as full page (not modal)
+    var pageHtml = '<div style="max-width:680px;margin:0 auto;padding-bottom:80px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+      + '<button class="btn btn-outline" onclick="loadPage(\'jobs\')" style="font-size:13px;">\u2190 Back to Jobs</button>'
+      + '<button class="btn btn-primary" onclick="document.getElementById(\'job-form\').requestSubmit()">Save Job</button>'
+      + '</div>'
+      + '<h2 style="font-size:20px;margin-bottom:16px;">' + (jobId ? 'Edit Job #' + j.jobNumber : 'New Job') + '</h2>'
+      + html
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">'
+      + '<button class="btn btn-outline" onclick="loadPage(\'jobs\')">Cancel</button>'
+      + '<button class="btn btn-primary" onclick="document.getElementById(\'job-form\').requestSubmit()">Save Job</button>'
+      + '</div></div>';
+
+    var content = document.getElementById('pageContent');
+    if (content) content.innerHTML = pageHtml;
   },
 
-  _setArrival: function(btn, window) {
+  _setArrival: function(btn, arrival) {
     document.querySelectorAll('.arr-btn').forEach(function(b) {
       b.classList.remove('btn-primary'); b.classList.add('btn-outline');
     });
     btn.classList.remove('btn-outline'); btn.classList.add('btn-primary');
-    document.getElementById('j-arrival').value = window;
+    document.getElementById('j-arrival').value = arrival;
   },
 
   save: function(e, jobId) {
     e.preventDefault();
     var clientId = document.getElementById('j-clientId').value;
+    if (!clientId) { UI.toast('Select a client', 'error'); return; }
     // Get client from localStorage directly
     var allClients = [];
     try { allClients = JSON.parse(localStorage.getItem('bm-clients') || '[]'); } catch(e) {}
@@ -563,7 +688,7 @@ var JobsPage = {
       DB.jobs.create(data);
       UI.toast('Job created');
     }
-    UI.closeModal();
+    if (document.querySelector('.modal-overlay')) UI.closeModal();
     loadPage('jobs');
   },
 
@@ -574,7 +699,7 @@ var JobsPage = {
     var timeEntries = DB.timeEntries ? DB.timeEntries.getAll().filter(function(te) { return te.jobId === id; }) : [];
     var totalHours = timeEntries.reduce(function(s, te) { return s + (te.hours || 0); }, 0);
 
-    // Jobber-style job detail
+    // previous system-style job detail
     var statusColors = {scheduled:'#1565c0',in_progress:'#e07c24',completed:'#2e7d32',invoiced:'#2e7d32',late:'#dc3545',cancelled:'#6c757d'};
     var statusColor = statusColors[j.status] || '#2e7d32';
     var client = j.clientId ? DB.clients.getById(j.clientId) : null;
@@ -584,7 +709,12 @@ var JobsPage = {
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
       + '<button class="btn btn-outline" onclick="loadPage(\'jobs\')" style="padding:6px 12px;font-size:12px;">← Back to Jobs</button>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
-      + (j.clientPhone ? '<a href="tel:' + (j.clientPhone||'').replace(/\D/g,'') + '" class="btn btn-outline" style="font-size:12px;">📞 Call</a>' : '')
+      + (function() {
+        var phone = j.clientPhone || (client && client.phone) || '';
+        return phone ? '<a href="tel:' + phone.replace(/\D/g,'') + '" class="btn btn-outline" style="font-size:12px;">📞 Call</a>'
+          + '<a href="sms:' + phone.replace(/\D/g,'') + '" class="btn btn-outline" style="font-size:12px;">💬 Text</a>' : '';
+      })()
+      + (j.crew && j.crew.length > 0 ? '<button class="btn btn-outline" style="font-size:12px;" onclick="JobsPage._textCrew(\'' + id + '\')">📲 Text Crew</button>' : '')
       + (j.status === 'completed' ? '<button class="btn btn-outline" style="font-size:12px;color:#f9a825;border-color:#f9a825;" onclick="JobsPage._requestReview(\'' + id + '\')">⭐ Request Review</button>' : '')
       + (j.status === 'scheduled' || j.status === 'in_progress' ? '<button class="btn btn-outline" style="font-size:12px;" onclick="JobsPage._markComplete(\'' + id + '\')">✓ Mark Complete</button>' : '')
       + (j.status === 'completed' && !j.invoiceId ? '<button class="btn btn-primary" style="font-size:12px;" onclick="(function(){var inv=Workflow.jobToInvoice(\'' + id + '\');loadPage(\'invoices\');if(inv)setTimeout(function(){InvoicesPage.showDetail(inv.id);},100);})()">💰 Create Invoice</button>' : '')
@@ -595,7 +725,7 @@ var JobsPage = {
       + '<div class="more-dd" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--border);border-radius:8px;padding:4px 0;z-index:200;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,.12);">'
       + '<button onclick="JobsPage.showForm(\'' + id + '\')" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);">✏️ Edit Job</button>'
       + '<button onclick="PDF.generateJobSheet(\'' + id + '\')" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);">📄 Job Sheet PDF</button>'
-      + (j.property ? '<a href="https://maps.google.com/?q=' + encodeURIComponent(j.property) + '" target="_blank" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);text-decoration:none;">🗺 Navigate to Property</a>' : '')
+      + (j.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(j.property) + '" target="_blank" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);text-decoration:none;">🗺 Navigate to Property</a>' : '')
       + (j.status !== 'completed' ? '<button onclick="JobsPage._markComplete(\'' + id + '\')" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);">✓ Mark Complete</button>' : '')
       + (j.status === 'completed' && !j.invoiceId ? '<button onclick="(function(){var inv=Workflow.jobToInvoice(\'' + id + '\');loadPage(\'invoices\');if(inv)setTimeout(function(){InvoicesPage.showDetail(inv.id);},100);})()" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);">💰 Create Invoice</button>' : '')
       + '<button onclick="JobsPage._requestReview(\'' + id + '\')" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--text);">⭐ Request Review</button>'
@@ -613,7 +743,7 @@ var JobsPage = {
       + '<div style="font-size:13px;color:var(--text-light);">'
       + (j.scheduledDate ? UI.dateShort(j.scheduledDate) + (j.startTime ? ' at ' + j.startTime : '') : 'Not scheduled')
       + '</div>'
-      + (j.property ? '<div style="font-size:13px;color:var(--text-light);margin-top:2px;">📍 ' + UI.esc(j.property) + '</div>' : '')
+      + (j.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(j.property) + '" target="_blank" style="display:block;font-size:13px;color:var(--accent);margin-top:2px;text-decoration:none;">📍 ' + UI.esc(j.property) + ' →</a>' : '')
       + '</div>'
       + '<div style="text-align:right;">' + UI.statusBadge(j.status) + '<div style="font-size:24px;font-weight:800;color:var(--accent);margin-top:6px;">' + UI.money(j.total) + '</div></div>'
       + '</div></div>'
@@ -625,7 +755,7 @@ var JobsPage = {
       + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;">'
       + '<div style="font-size:12px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Client</div>'
       + '<div style="font-size:16px;font-weight:700;margin-bottom:4px;">' + UI.esc(j.clientName || '—') + '</div>'
-      + (j.property ? '<div style="font-size:13px;color:var(--text-light);margin-bottom:8px;">📍 ' + UI.esc(j.property) + '</div>' : '')
+      + (j.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(j.property) + '" target="_blank" style="display:block;font-size:13px;color:var(--accent);margin-bottom:8px;text-decoration:none;">📍 ' + UI.esc(j.property) + ' →</a>' : '')
       + (j.clientPhone || (client && client.phone) ? '<a href="tel:' + (j.clientPhone || (client && client.phone)||'').replace(/\D/g,'') + '" style="display:block;font-size:13px;color:var(--accent);margin-bottom:4px;text-decoration:none;">📞 ' + (j.clientPhone || (client && client.phone)) + '</a>' : '')
       + (j.clientEmail || (client && client.email) ? '<a href="mailto:' + (j.clientEmail || (client && client.email) || '') + '" style="font-size:13px;color:#1565c0;text-decoration:none;">✉️ ' + (j.clientEmail || (client && client.email) || '') + '</a>' : '')
       + '</div>'
@@ -785,8 +915,8 @@ var JobsPage = {
       + '<h4 style="font-size:13px;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Quick Actions</h4>'
       + (j.clientPhone ? '<a href="tel:' + j.clientPhone + '" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;">📞 Call Client</a>' : '')
       + (j.clientPhone ? '<button class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;" onclick="if(typeof Dialpad!==\'undefined\'){var fn=\'' + UI.esc((j.clientName||'').split(' ')[0]||'there') + '\';var msg=\'Hi \'+fn+\', this is Doug from \'+JobsPage._co().name+\'.' + (j.scheduledDate ? ' Your job is scheduled for ' + UI.dateShort(j.scheduledDate) + '.' : '') + ' Let us know if you have any questions! \'+JobsPage._co().phone;Dialpad.showTextModal(\'' + (j.clientPhone||'').replace(/\D/g,'') + '\',msg);}">📱 Text Client</button>' : '')
-      + (j.property ? '<a href="https://maps.google.com/?q=' + encodeURIComponent(j.property) + '" target="_blank" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;">🗺 Navigate</a>' : '')
-      + '<button class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;" onclick="PropertyMap.show(\'' + (j.property || '').replace(/'/g, "\\'") + '\')">📐 Equipment Layout</button>'
+      + (j.property ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(j.property) + '" target="_blank" class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;">🗺 Navigate</a>' : '')
+      + '<button class="btn btn-outline" style="width:100%;justify-content:center;margin-bottom:6px;font-size:12px;" onclick="JobsPage._showPropertyMap(\'' + id + '\')">📐 Equipment Layout</button>'
       + '</div>'
 
       // Activity timeline
@@ -857,6 +987,53 @@ var JobsPage = {
     UI.showModal('Job', '<p>Use full-page view.</p>', {
       footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Close</button>'
     });
+  },
+
+  _getSignature: function(id, callback) {
+    var html = '<div style="text-align:center;">'
+      + '<p style="font-size:14px;color:var(--text-light);margin-bottom:12px;">Client signature confirms work is complete and satisfactory.</p>'
+      + '<canvas id="job-sig-canvas" width="600" height="180" style="border:2px solid var(--border);border-radius:8px;width:100%;touch-action:none;cursor:crosshair;background:#fff;"></canvas>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;">'
+      + '<button type="button" class="btn btn-outline" style="flex:1;font-size:12px;" onclick="var c=document.getElementById(\'job-sig-canvas\');if(c){c.getContext(\'2d\').clearRect(0,0,c.width,c.height);}">Clear</button>'
+      + '</div>'
+      + '<div style="margin-top:12px;">'
+      + '<input type="text" id="job-sig-name" placeholder="Client name (print)" style="width:100%;padding:10px;border:2px solid var(--border);border-radius:8px;font-size:15px;text-align:center;">'
+      + '</div>'
+      + '</div>';
+
+    UI.showModal('Client Sign-Off', html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal();JobsPage._markComplete(\'' + id + '\')">Skip Signature</button>'
+        + ' <button class="btn btn-primary" onclick="JobsPage._saveSignature(\'' + id + '\')">Save & Complete</button>'
+    });
+
+    // Setup canvas drawing
+    setTimeout(function() {
+      var canvas = document.getElementById('job-sig-canvas');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var drawing = false;
+      var rect = canvas.getBoundingClientRect();
+      function getPos(e) {
+        var t = e.touches ? e.touches[0] : e;
+        return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
+      }
+      function start(e) { e.preventDefault(); drawing = true; ctx.beginPath(); var p = getPos(e); ctx.moveTo(p.x, p.y); }
+      function draw(e) { if (!drawing) return; e.preventDefault(); var p = getPos(e); ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.lineTo(p.x, p.y); ctx.stroke(); }
+      function stop() { drawing = false; }
+      canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stop); canvas.addEventListener('mouseleave', stop);
+      canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stop);
+    }, 100);
+  },
+
+  _saveSignature: function(id) {
+    var canvas = document.getElementById('job-sig-canvas');
+    var nameEl = document.getElementById('job-sig-name');
+    var name = nameEl ? nameEl.value.trim() : '';
+    if (!name) { alert('Client must print their name.'); return; }
+    var sigData = canvas ? canvas.toDataURL('image/png') : '';
+    DB.jobs.update(id, { clientSignature: sigData, signedBy: name, signedAt: new Date().toISOString() });
+    UI.closeModal();
+    JobsPage._markComplete(id);
   },
 
   _markComplete: function(id) {

@@ -32,10 +32,10 @@ var PDF = {
 
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com',
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website,
       address: localStorage.getItem('bm-co-address') || '1 Highland Industrial Park, Peekskill, NY 10566',
       licenses: localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644'
     };
@@ -181,19 +181,16 @@ var PDF = {
 
     // Payment methods
     html += '<div style="background:#f0f8e8;border-radius:8px;padding:16px;margin-bottom:24px;border:1px solid #c8e6c9;">'
-      + '<h4 style="font-size:14px;color:#1a3c12;margin-bottom:10px;">Payment Options</h4>'
-      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;font-size:13px;">'
-      + '<div style="padding:10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;"><strong>💳 Card</strong><br><span style="font-size:11px;color:#666;">Pay online via link</span></div>'
-      + '<div style="padding:10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;"><strong>📝 Check</strong><br><span style="font-size:11px;color:#666;">' + PDF._co().name + '</span></div>'
-      + '<div style="padding:10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;"><strong>Venmo</strong><br><span style="font-size:11px;color:#666;">@SecondNatureTree</span></div>'
-      + '<div style="padding:10px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;"><strong>Zelle</strong><br><span style="font-size:11px;color:#666;">info@peekskilltree.com</span></div>'
+      + '<h4 style="font-size:14px;color:#1a3c12;margin-bottom:10px;">Payment</h4>'
+      + '<div style="text-align:center;font-size:14px;">'
+      + '<div style="padding:12px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;"><strong>💳 Pay online via the link in your email</strong><br><span style="font-size:12px;color:#666;">Secure card payment powered by Stripe</span></div>'
       + '</div></div>';
 
     // Payment terms
     html += '<div class="notes"><h4>Payment Terms</h4>'
       + '<p>Payment is due by ' + UI.dateShort(inv.dueDate) + '. '
       + 'Late payments may be subject to a 1.5% monthly finance charge. '
-      + 'For questions about this invoice, call (914) 391-5233 or email info@peekskilltree.com.</p></div>';
+      + 'For questions about this invoice, call ' + co.phone + ' or email ' + co.email + '.</p></div>';
 
     html += PDF._footer() + '</body></html>';
     PDF._openPrint(html);

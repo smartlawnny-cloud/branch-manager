@@ -4,17 +4,42 @@
 var InvoicesPage = {
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
   _page: 0, _perPage: 50, _search: '', _filter: 'all', _sortCol: 'invoiceNumber', _sortDir: 'desc',
+  _activeTab: 'invoices',
+
+  switchTab: function(tab) {
+    InvoicesPage._activeTab = tab;
+    loadPage('invoices');
+  },
+
+  _pendingDetail: null,
 
   render: function() {
     var self = InvoicesPage;
+    if (self._pendingDetail) {
+      var _pid = self._pendingDetail;
+      self._pendingDetail = null;
+      setTimeout(function() { InvoicesPage.showDetail(_pid); }, 50);
+    }
+    var activeTab = self._activeTab || 'invoices';
+
+    // Tab bar
+    var html = '<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px;">'
+      + '<button onclick="InvoicesPage.switchTab(\'invoices\')" style="padding:10px 20px;font-size:14px;font-weight:' + (activeTab==='invoices'?'700':'500') + ';border:none;background:none;cursor:pointer;color:' + (activeTab==='invoices'?'var(--accent)':'var(--text-light)') + ';border-bottom:2px solid ' + (activeTab==='invoices'?'var(--accent)':'transparent') + ';margin-bottom:-2px;">Invoices</button>'
+      + '<button onclick="InvoicesPage.switchTab(\'payments\')" style="padding:10px 20px;font-size:14px;font-weight:' + (activeTab==='payments'?'700':'500') + ';border:none;background:none;cursor:pointer;color:' + (activeTab==='payments'?'var(--accent)':'var(--text-light)') + ';border-bottom:2px solid ' + (activeTab==='payments'?'var(--accent)':'transparent') + ';margin-bottom:-2px;">Payments</button>'
+      + '</div>';
+
+    if (activeTab === 'payments') {
+      return html + Payments._renderContent();
+    }
+
     var all = DB.invoices.getAll();
     var receivable = DB.invoices.totalReceivable();
     var unpaid = all.filter(function(i) { return i.status !== 'paid'; });
@@ -32,7 +57,7 @@ var InvoicesPage = {
     var recentIssuedTotal = recentIssued.reduce(function(s,i){return s+(i.total||0);},0);
     var avgInvoice = recentIssued.length > 0 ? Math.round(recentIssuedTotal / recentIssued.length) : 0;
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
       // Overview
       + '<div onclick="InvoicesPage._setFilter(\'all\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
       + '<div style="font-size:14px;font-weight:700;margin-bottom:8px;">Overview</div>'
@@ -90,7 +115,7 @@ var InvoicesPage = {
       + '</div></div>';
 
     // Floating batch action bar (fixed to bottom)
-    html += '<div id="inv-batch-bar" style="display:none;position:fixed;bottom:0;left:var(--sidebar-w,240px);right:0;z-index:500;background:#1a1a2e;color:#fff;padding:12px 24px;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:invBatchSlideUp .25s ease-out;">'
+    html += '<div id="inv-batch-bar" style="display:none;position:fixed;bottom:0;left:var(--sidebar-w,0);right:0;z-index:500;background:#1a1a2e;color:#fff;padding:12px 24px;padding-bottom:max(12px,env(safe-area-inset-bottom));align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,.3);animation:invBatchSlideUp .25s ease-out;">'
       + '<span id="inv-batch-count" style="font-weight:700;font-size:14px;">0 selected</span>'
       + '<div style="display:flex;gap:8px;align-items:center;">'
       + '<button onclick="InvoicesPage._batchPaid()" style="background:#2e7d32;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Mark Paid</button>'
@@ -100,29 +125,31 @@ var InvoicesPage = {
       + '</div></div>'
       + '<style>@keyframes invBatchSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}</style>';
 
-    html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'
-      + '<table class="data-table"><thead><tr>'
-      + '<th style="width:36px;"><input type="checkbox" onchange="InvoicesPage._toggleAll(this.checked)" title="Select all"></th>'
-      + self._sortTh('Client', 'clientName') + self._sortTh('#', 'invoiceNumber') + self._sortTh('Issued', 'createdAt') + '<th>Subject</th>' + self._sortTh('Status', 'status') + self._sortTh('Total', 'total', 'text-align:right;') + self._sortTh('Balance', 'balance', 'text-align:right;')
-      + '</tr></thead><tbody>';
-
+    // Jobber card-style invoice list
     if (page.length === 0) {
-      html += '<tr><td colspan="9">' + (self._search ? '<div style="text-align:center;padding:24px;color:var(--text-light);">No invoices match "' + self._search + '"</div>' : UI.emptyState('💰', 'No invoices yet', 'Complete a job and create an invoice.')) + '</td></tr>';
+      html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);padding:40px;text-align:center;">'
+        + (self._search ? '<div style="color:var(--text-light);">No invoices match "' + self._search + '"</div>' : UI.emptyState('💰', 'No invoices yet', 'Complete a job and create an invoice.'))
+        + '</div>';
     } else {
+      html += '<div style="display:flex;flex-direction:column;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;">';
       page.forEach(function(inv) {
-        html += '<tr style="cursor:pointer;" onclick="InvoicesPage.showDetail(\'' + inv.id + '\')">'
-          + '<td onclick="event.stopPropagation()"><input type="checkbox" class="inv-check" data-id="' + inv.id + '" onchange="InvoicesPage._updateBatch()"></td>'
-          + '<td><strong>' + UI.esc(inv.clientName || '—') + '</strong></td>'
-          + '<td>#' + (inv.invoiceNumber || '') + '</td>'
-          + '<td style="white-space:nowrap;">' + UI.dateShort(inv.createdAt || inv.date) + '</td>'
-          + '<td style="font-size:13px;color:var(--text-light);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.esc(inv.subject || '—') + '</td>'
-          + '<td>' + UI.statusBadge(inv.status) + '</td>'
-          + '<td style="text-align:right;font-weight:600;">' + UI.money(inv.total) + '</td>'
-          + '<td style="text-align:right;font-weight:600;color:' + ((inv.balance||0) > 0 ? 'var(--red)' : 'var(--accent)') + ';">' + UI.money(inv.balance || 0) + '</td>'
-          + '</tr>';
+        var statusColor = inv.status === 'paid' ? '#2e7d32' : inv.status === 'overdue' ? '#dc3545' : inv.status === 'draft' ? '#6c757d' : '#1565c0';
+        html += '<div onclick="InvoicesPage.showDetail(\'' + inv.id + '\')" style="background:var(--white);padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'var(--white)\'">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="font-size:16px;font-weight:700;">' + UI.esc(inv.clientName || '—') + '</div>'
+          + '<div style="font-size:14px;color:var(--text-light);margin-top:2px;">#' + (inv.invoiceNumber || '') + '</div>'
+          + '<div style="font-size:14px;color:var(--text-light);margin-top:2px;">' + UI.dateShort(inv.createdAt || inv.date) + (inv.subject ? ' · ' + UI.esc(inv.subject) : '') + '</div>'
+          + '<div style="margin-top:6px;font-size:14px;">'
+          + '<span style="font-weight:700;">Total ' + UI.money(inv.total) + '</span>'
+          + ((inv.balance||0) > 0 ? '<span style="margin-left:12px;">Balance <strong style="color:' + ((inv.status === 'overdue' || inv.status === 'past_due') ? '#dc3545' : 'var(--text)') + ';">' + UI.money(inv.balance) + '</strong></span>' : '')
+          + '</div></div>'
+          + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+          + UI.statusBadge(inv.status)
+          + '<button onclick="event.stopPropagation();" style="background:none;border:none;font-size:18px;color:var(--text-light);cursor:pointer;padding:4px;">···</button>'
+          + '</div></div>';
       });
+      html += '</div>';
     }
-    html += '</tbody></table></div>';
 
     // Pagination
     var totalPages = Math.ceil(filtered.length / self._perPage);
@@ -441,7 +468,7 @@ var InvoicesPage = {
       + '  Amount Due: ' + amtDue + '\n'
       + (inv.dueDate ? '  Due: ' + UI.dateShort(inv.dueDate) + '\n' : '') + '\n'
       + 'Pay online (card, or tip optional):\n' + payLink + '\n\n'
-      + 'Also accepted: Venmo (@SecondNatureTree), Zelle (info@peekskilltree.com), check, or cash.\n\n'
+      + ''
       + 'Questions? Reply to this email or call/text ' + InvoicesPage._co().phone + '.\n\n'
       + 'Thanks,\nDoug Brown\n' + InvoicesPage._co().name + '\n' + InvoicesPage._co().phone + '\n' + InvoicesPage._co().website;
 
@@ -477,12 +504,7 @@ var InvoicesPage = {
       + '<a href="' + payLink + '" style="display:inline-block;background:linear-gradient(135deg,#00836c,#1a3c12);color:#fff;padding:16px 36px;border-radius:10px;font-size:17px;font-weight:800;text-decoration:none;letter-spacing:-0.3px;box-shadow:0 4px 14px rgba(0,131,108,.35);">💳 Pay ' + amtDue + ' Online</a>'
       + '</div>'
       + '<p style="font-size:12px;color:#a0aec0;text-align:center;margin-bottom:20px;">You can also add an optional gratuity for the crew on the payment page.</p>'
-      + '<div style="background:#f7fafc;border-radius:8px;padding:14px 16px;font-size:13px;color:#4a5568;">'
-      + '<strong>Other ways to pay:</strong><br>'
-      + '• <strong>Venmo:</strong> @SecondNatureTree<br>'
-      + '• <strong>Zelle:</strong> info@peekskilltree.com<br>'
-      + '• <strong>Check/Cash:</strong> 1 Highland Industrial Park, Peekskill NY 10566'
-      + '</div>'
+      + ''
       + '<p style="font-size:13px;color:#718096;margin-top:16px;">Questions? Reply to this email or call/text <strong>' + InvoicesPage._co().phone + '</strong>.</p>'
       + '<p style="font-size:13px;color:#2d3748;margin-top:12px;">Thanks,<br><strong>Doug Brown</strong><br>' + InvoicesPage._co().name + '</p>'
       + '</div></div></div>';
@@ -515,7 +537,7 @@ var InvoicesPage = {
     var client = inv.clientId ? DB.clients.getById(inv.clientId) : null;
     var clientPhone = inv.clientPhone || (client ? client.phone : '');
     var clientEmail = inv.clientEmail || (client ? client.email : '');
-    var clientAddr = client ? client.address : '';
+    var clientAddr = inv.property || (client ? client.address : '');
 
     var html = '<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px;">'
       // Colored status bar
@@ -682,8 +704,16 @@ var InvoicesPage = {
   },
 
   // ── New Invoice Form ──
-  showForm: function(invoiceId) {
+  showForm: function(invoiceId, clientId) {
     var inv = invoiceId ? DB.invoices.getById(invoiceId) : {};
+    // Pre-fill client from parameter (e.g., from client detail page)
+    if (!inv.clientId && clientId) {
+      var prefillClient = DB.clients.getById(clientId);
+      if (prefillClient) {
+        inv.clientId = clientId;
+        inv.clientName = prefillClient.name;
+      }
+    }
     var items = inv.lineItems || [{ description: '', qty: 1, rate: 0 }];
     var services = DB.services.getAll();
 
@@ -708,6 +738,7 @@ var InvoicesPage = {
       html += UI.formField('Client *', 'select', 'inv-clientId', '', { options: [{ value: '', label: 'Select a client...' }].concat(clientOptions) });
     }
 
+    html += UI.formField('Property Address', 'text', 'inv-property', inv.property || (inv.clientId && DB.clients.getById(inv.clientId) ? DB.clients.getById(inv.clientId).address : ''), { placeholder: 'Property address' });
     html += UI.formField('Subject', 'text', 'inv-subject', inv.subject || 'For Services Rendered', { placeholder: 'Invoice subject' });
 
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
@@ -735,7 +766,7 @@ var InvoicesPage = {
       + '<span style="color:var(--text-light);">Subtotal</span><span id="inv-subtotal-display" style="font-weight:600;">' + UI.money(_invSubtotal) + '</span>'
       + '</div>'
       + '<div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;border-bottom:1px solid var(--border);">'
-      + '<span style="color:var(--text-light);">Tax (<input type="number" id="inv-tax-rate" value="' + _invTaxRate + '" step="0.001" min="0" max="100" oninput="InvoicesPage.calcTotal()" style="width:55px;font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;text-align:center;">%)</span>'
+      + '<span style="color:var(--text-light);">Tax (' + _invTaxRate + '%)</span><input type="hidden" id="inv-tax-rate" value="' + _invTaxRate + '">'
       + '<span id="inv-tax-display" style="font-weight:600;">' + UI.money(_invTaxAmt) + '</span>'
       + '</div>'
       + '<div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:var(--green-dark);color:var(--white);">'
@@ -747,12 +778,24 @@ var InvoicesPage = {
     html += UI.formField('Internal Notes', 'textarea', 'inv-notes', inv.notes || '', { placeholder: 'Notes (not shown to client)' })
       + '</form>';
 
-    UI.showModal(invoiceId ? 'Edit Invoice #' + inv.invoiceNumber : 'New Invoice', html, {
-      wide: true,
-      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Cancel</button>'
-        + ' <button class="btn btn-outline" onclick="InvoicesPage.saveAs(\'draft\')">Save Draft</button>'
-        + ' <button class="btn btn-primary" onclick="InvoicesPage.saveAs(\'sent\')">Save & Send</button>'
-    });
+    // Render as full page (not modal)
+    var pageHtml = '<div style="max-width:680px;margin:0 auto;padding-bottom:80px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+      + '<button class="btn btn-outline" onclick="loadPage(\'invoices\')" style="font-size:13px;">\u2190 Back to Invoices</button>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="btn btn-outline" onclick="InvoicesPage.saveAs(\'draft\')">Save Draft</button>'
+      + '<button class="btn btn-primary" onclick="InvoicesPage.saveAs(\'sent\')">Save & Send</button>'
+      + '</div></div>'
+      + '<h2 style="font-size:20px;margin-bottom:16px;">' + (invoiceId ? 'Edit Invoice #' + inv.invoiceNumber : 'New Invoice') + '</h2>'
+      + html
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">'
+      + '<button class="btn btn-outline" onclick="loadPage(\'invoices\')">Cancel</button>'
+      + '<button class="btn btn-outline" onclick="InvoicesPage.saveAs(\'draft\')">Save Draft</button>'
+      + '<button class="btn btn-primary" onclick="InvoicesPage.saveAs(\'sent\')">Save & Send</button>'
+      + '</div></div>';
+
+    var content = document.getElementById('pageContent');
+    if (content) content.innerHTML = pageHtml;
   },
 
   _itemRow: function(index, item, services) {
@@ -831,9 +874,55 @@ var InvoicesPage = {
 
   save: function(e, invoiceId) {
     e.preventDefault();
-    var clientId = document.getElementById('inv-clientId').value;
-    if (!clientId) { UI.toast('Select a client', 'error'); return; }
+    try { return InvoicesPage._saveImpl(e, invoiceId); }
+    catch(err) {
+      console.error('[InvoicesPage.save] ERROR:', err);
+      InvoicesPage._saving = false;
+      var f = e.target || document.getElementById('inv-form');
+      if (f) f.querySelectorAll('button').forEach(function(b) { b.disabled = false; b.style.opacity = ''; b.style.cursor = ''; });
+      UI.toast('Save failed: ' + (err && err.message ? err.message : err), 'error');
+    }
+  },
+
+  _saveImpl: function(e, invoiceId) {
+    // Guard against double-submit (don't disable on validation-only failures)
+    if (InvoicesPage._saving) return;
+    var form = e.target || document.getElementById('inv-form');
+    var _disableButtons = function() {
+      InvoicesPage._saving = true;
+      if (form) form.querySelectorAll('button[type=submit], button[onclick*="requestSubmit"]').forEach(function(b) {
+        b.disabled = true; b.style.opacity = '0.5'; b.style.cursor = 'wait';
+      });
+    };
+    var _unsave = function() {
+      InvoicesPage._saving = false;
+      if (form) form.querySelectorAll('button').forEach(function(b) {
+        b.disabled = false; b.style.opacity = ''; b.style.cursor = '';
+      });
+    };
+    var clientIdEl = document.getElementById('inv-clientId');
+    var clientId = clientIdEl ? clientIdEl.value : '';
+    if (!clientId) {
+      UI.toast('Client required — pick or create one before saving', 'error');
+      var clientArea = document.getElementById('inv-client-search') || document.getElementById('inv-client-block') || clientIdEl;
+      if (clientArea && clientArea.scrollIntoView) clientArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (clientArea) {
+        var orig = clientArea.style.boxShadow;
+        clientArea.style.boxShadow = '0 0 0 3px #dc3545';
+        clientArea.style.transition = 'box-shadow .3s';
+        setTimeout(function() { if (document.contains(clientArea)) clientArea.style.boxShadow = orig || ''; }, 2500);
+      }
+      // Don't disable buttons — user needs to retry after picking client
+      return;
+    }
     var client = DB.clients.getById(clientId);
+    if (!client) {
+      UI.toast('Selected client no longer exists — pick another', 'error');
+      return;
+    }
+
+    // Passed validation — NOW disable the buttons to prevent double-submit
+    _disableButtons();
 
     var items = [];
     var subtotal = 0;
@@ -852,14 +941,17 @@ var InvoicesPage = {
     var taxAmount = Math.round(subtotal * taxRate / 100 * 100) / 100;
     var total = subtotal + taxAmount;
 
-    var form = document.getElementById('inv-form');
+    // form already declared at top
     var status = (form && form.dataset.saveStatus) ? form.dataset.saveStatus : 'draft';
 
+    // Preserve jobId/quoteId/property from existing invoice (don't lose on edit)
+    var existingInv = invoiceId ? DB.invoices.getById(invoiceId) : {};
     var data = {
       clientId: clientId,
       clientName: client ? client.name : '',
       clientPhone: client ? client.phone : '',
       clientEmail: client ? client.email : '',
+      property: (document.getElementById('inv-property') || {}).value || existingInv.property || (client ? client.address : '') || '',
       subject: document.getElementById('inv-subject').value.trim(),
       issuedDate: document.getElementById('inv-issueDate').value,
       dueDate: document.getElementById('inv-dueDate').value,
@@ -870,6 +962,8 @@ var InvoicesPage = {
       total: total,
       balance: total,
       notes: document.getElementById('inv-notes').value.trim(),
+      jobId: existingInv.jobId || null,
+      quoteId: existingInv.quoteId || null,
       status: status
     };
 
@@ -881,7 +975,8 @@ var InvoicesPage = {
       UI.toast('Invoice created');
     }
 
-    UI.closeModal();
+    _unsave();
+    if (document.querySelector('.modal-overlay')) UI.closeModal();
     loadPage('invoices');
   }
 };

@@ -1,6 +1,6 @@
 /**
  * Branch Manager — Settings Page
- * Company info, Supabase config, Jobber CSV import, data management
+ * Company info, Supabase config, previous system CSV import, data management
  */
 var SettingsPage = {
   render: function() {
@@ -36,12 +36,12 @@ var SettingsPage = {
 
     // Company Info — editable, saved to localStorage
     var co = {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
       address: localStorage.getItem('bm-co-address') || '1 Highland Industrial Park, Peekskill, NY 10566',
       licenses: localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com',
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website,
       taxRate: localStorage.getItem('bm-tax-rate') || '8.375'
     };
     html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
@@ -61,6 +61,243 @@ var SettingsPage = {
       + '<div style="font-size:11px;color:var(--text-light);margin-top:3px;">Applied to new quotes & invoices (e.g. 8.375 for NYS)</div>'
       + '</div>'
       + '</div></div>';
+
+    // ── Work Settings ──
+    var ws = {
+      defaultStart: localStorage.getItem('bm-work-start') || '07:00',
+      defaultEnd: localStorage.getItem('bm-work-end') || '15:30',
+      overtimeThreshold: localStorage.getItem('bm-ot-threshold') || '40',
+      payPeriod: localStorage.getItem('bm-pay-period') || 'biweekly',
+      arrivalWindows: localStorage.getItem('bm-arrival-windows') || 'morning,afternoon,all-day',
+      minJobDuration: localStorage.getItem('bm-min-job-hrs') || '2',
+      crewSeeClientInfo: localStorage.getItem('bm-crew-see-client') !== 'false'
+    };
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Work Settings</h3>'
+      + '<button onclick="SettingsPage._saveWorkSettings()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Default Start Time</label>'
+      + '<input type="time" id="ws-start" value="' + ws.defaultStart + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Default End Time</label>'
+      + '<input type="time" id="ws-end" value="' + ws.defaultEnd + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Overtime After (hrs/week)</label>'
+      + '<input type="number" id="ws-ot" value="' + ws.overtimeThreshold + '" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Pay Period</label>'
+      + '<select id="ws-pay" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">'
+      + '<option value="weekly"' + (ws.payPeriod === 'weekly' ? ' selected' : '') + '>Weekly</option>'
+      + '<option value="biweekly"' + (ws.payPeriod === 'biweekly' ? ' selected' : '') + '>Bi-weekly</option>'
+      + '<option value="semimonthly"' + (ws.payPeriod === 'semimonthly' ? ' selected' : '') + '>Semi-monthly</option>'
+      + '<option value="monthly"' + (ws.payPeriod === 'monthly' ? ' selected' : '') + '>Monthly</option>'
+      + '</select></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Min Job Duration (hrs)</label>'
+      + '<input type="number" id="ws-min-job" value="' + ws.minJobDuration + '" step="0.5" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;padding-top:20px;">'
+      + '<input type="checkbox" id="ws-crew-client" style="width:18px;height:18px;"' + (ws.crewSeeClientInfo ? ' checked' : '') + '>'
+      + '<label style="font-size:13px;">Crew can see client phone/email</label>'
+      + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div style="margin-top:12px;"><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:8px;">Business Hours</label>';
+    var bhDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var bhDefaults = {Sunday:'9:00 AM – 1:00 PM',Monday:'8:00 AM – 6:00 PM',Tuesday:'8:00 AM – 6:00 PM',Wednesday:'8:00 AM – 6:00 PM',Thursday:'8:00 AM – 6:00 PM',Friday:'8:00 AM – 6:00 PM',Saturday:'9:00 AM – 3:00 PM'};
+    bhDays.forEach(function(day) {
+      var stored = localStorage.getItem('bm-bh-' + day.toLowerCase()) || bhDefaults[day];
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f5f5f5;">'
+        + '<span style="font-size:13px;font-weight:600;width:90px;">' + day + '</span>'
+        + '<input type="text" id="bh-' + day.toLowerCase() + '" value="' + UI.esc(stored) + '" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;text-align:center;" placeholder="Closed">'
+        + '</div>';
+    });
+    html += '<div style="font-size:11px;color:var(--text-light);margin-top:6px;">Displayed on booking form and client communications. Type "Closed" for days off.</div>'
+      + '</div>'
+      + '</div>';
+
+    // ── Location Services ──
+    var locTrack = localStorage.getItem('bm-gps-tracking') !== 'false';
+    var locWorkOnly = localStorage.getItem('bm-gps-work-only') !== 'false';
+    var locGeofence = localStorage.getItem('bm-geofence') === 'true';
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Location Services</h3>'
+      + '<button onclick="SettingsPage._saveLocationSettings()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:12px;">'
+      + '<label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;">'
+      + '<input type="checkbox" id="loc-tracking" style="width:18px;height:18px;"' + (locTrack ? ' checked' : '') + '>'
+      + '<div><strong>GPS Tracking</strong><div style="font-size:12px;color:var(--text-light);">Track crew locations on the dispatch map</div></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;">'
+      + '<input type="checkbox" id="loc-work-only" style="width:18px;height:18px;"' + (locWorkOnly ? ' checked' : '') + '>'
+      + '<div><strong>Work Hours Only</strong><div style="font-size:12px;color:var(--text-light);">Only track during scheduled work hours (privacy)</div></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;">'
+      + '<input type="checkbox" id="loc-geofence" style="width:18px;height:18px;"' + (locGeofence ? ' checked' : '') + '>'
+      + '<div><strong>Geofence Auto Clock-In</strong><div style="font-size:12px;color:var(--text-light);">Automatically clock crew in when they arrive at a job site</div></div></label>'
+      + '</div>'
+      + '</div>';
+
+    // ── Notification Preferences ──
+    var notif = {
+      quoteApproved: localStorage.getItem('bm-notif-quote-approved') !== 'false',
+      paymentReceived: localStorage.getItem('bm-notif-payment') !== 'false',
+      newRequest: localStorage.getItem('bm-notif-new-request') !== 'false',
+      overdueInvoice: localStorage.getItem('bm-notif-overdue') !== 'false',
+      dailySummary: localStorage.getItem('bm-notif-daily-summary') === 'true',
+      jobCompleted: localStorage.getItem('bm-notif-job-completed') !== 'false'
+    };
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Notifications</h3>'
+      + '<button onclick="SettingsPage._saveNotifSettings()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:10px;">';
+    [
+      ['notif-quote-approved', notif.quoteApproved, 'Quote Approved', 'Email when a client approves a quote'],
+      ['notif-payment', notif.paymentReceived, 'Payment Received', 'Email when a client pays an invoice'],
+      ['notif-new-request', notif.newRequest, 'New Request', 'Email when a new booking request comes in'],
+      ['notif-overdue', notif.overdueInvoice, 'Overdue Invoice', 'Email when an invoice becomes overdue'],
+      ['notif-job-completed', notif.jobCompleted, 'Job Completed', 'Email when crew marks a job complete'],
+      ['notif-daily-summary', notif.dailySummary, 'Daily Summary', 'Morning email with today\'s schedule + action items']
+    ].forEach(function(n) {
+      html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+        + '<input type="checkbox" id="' + n[0] + '" style="width:18px;height:18px;"' + (n[1] ? ' checked' : '') + '>'
+        + '<div><strong style="font-size:13px;">' + n[2] + '</strong><div style="font-size:11px;color:var(--text-light);">' + n[3] + '</div></div></label>';
+    });
+    html += '</div></div>';
+
+    // ── Default Quote & Invoice Settings ──
+    var qd = {
+      paymentTerms: localStorage.getItem('bm-payment-terms') || 'net30',
+      defaultDeposit: localStorage.getItem('bm-default-deposit') || '50',
+      quoteValidity: localStorage.getItem('bm-quote-validity') || '30',
+      showLineItemPrices: localStorage.getItem('bm-show-line-prices') !== 'false',
+      companyLogo: localStorage.getItem('bm-company-logo') || ''
+    };
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Quote & Invoice Defaults</h3>'
+      + '<button onclick="SettingsPage._saveQuoteDefaults()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Payment Terms</label>'
+      + '<select id="qd-terms" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">'
+      + '<option value="due-on-completion"' + (qd.paymentTerms === 'due-on-completion' ? ' selected' : '') + '>Due on completion</option>'
+      + '<option value="net15"' + (qd.paymentTerms === 'net15' ? ' selected' : '') + '>Net 15</option>'
+      + '<option value="net30"' + (qd.paymentTerms === 'net30' ? ' selected' : '') + '>Net 30</option>'
+      + '<option value="net60"' + (qd.paymentTerms === 'net60' ? ' selected' : '') + '>Net 60</option>'
+      + '</select></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Default Deposit %</label>'
+      + '<input type="number" id="qd-deposit" value="' + qd.defaultDeposit + '" min="0" max="100" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Quote Valid (days)</label>'
+      + '<input type="number" id="qd-validity" value="' + qd.quoteValidity + '" min="1" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;padding-top:20px;">'
+      + '<input type="checkbox" id="qd-show-prices" style="width:18px;height:18px;"' + (qd.showLineItemPrices ? ' checked' : '') + '>'
+      + '<label style="font-size:13px;">Show line item prices to client</label>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+
+    // ── Booking Form Settings ──
+    var bf = {
+      enabled: localStorage.getItem('bm-booking-enabled') !== 'false',
+      autoResponse: localStorage.getItem('bm-booking-auto-response') !== 'false',
+      requirePhone: localStorage.getItem('bm-booking-require-phone') !== 'false',
+      requireAddress: localStorage.getItem('bm-booking-require-address') !== 'false',
+      showServices: localStorage.getItem('bm-booking-show-services') !== 'false'
+    };
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Online Booking</h3>'
+      + '<button onclick="SettingsPage._saveBookingSettings()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:10px;">'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="bf-enabled" style="width:18px;height:18px;"' + (bf.enabled ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Online Booking Enabled</strong><div style="font-size:11px;color:var(--text-light);">Show booking form at peekskilltree.com/branchmanager/book.html</div></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="bf-auto-response" style="width:18px;height:18px;"' + (bf.autoResponse ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Auto-Response Email</strong><div style="font-size:11px;color:var(--text-light);">Send confirmation email when request is received</div></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="bf-require-phone" style="width:18px;height:18px;"' + (bf.requirePhone ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Require Phone Number</strong></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="bf-require-address" style="width:18px;height:18px;"' + (bf.requireAddress ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Require Property Address</strong></div></label>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="bf-show-services" style="width:18px;height:18px;"' + (bf.showServices ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Show Service Picker</strong><div style="font-size:11px;color:var(--text-light);">Let clients select the type of service they need</div></div></label>'
+      + '</div></div>';
+
+    // ── Review Settings ──
+    var rev = {
+      googleUrl: localStorage.getItem('bm-review-google-url') || 'https://g.page/r/CfY_something/review',
+      sendAfter: localStorage.getItem('bm-review-send-after') || 'completion',
+      delayDays: localStorage.getItem('bm-review-delay') || '1',
+      autoSend: localStorage.getItem('bm-review-auto') === 'true'
+    };
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      + '<h3 style="margin:0;">Review Requests</h3>'
+      + '<button onclick="SettingsPage._saveReviewSettings()" style="background:var(--green-dark);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">Save</button>'
+      + '</div>'
+      + '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Google Review Link</label>'
+      + '<input type="url" id="rev-google-url" value="' + UI.esc(rev.googleUrl) + '" placeholder="https://g.page/r/your-business/review" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;box-sizing:border-box;">'
+      + '<div style="font-size:11px;color:var(--text-light);margin-top:2px;">Get this from Google Business Profile → Share review link</div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Send After</label>'
+      + '<select id="rev-send-after" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">'
+      + '<option value="completion"' + (rev.sendAfter === 'completion' ? ' selected' : '') + '>Job Completed</option>'
+      + '<option value="payment"' + (rev.sendAfter === 'payment' ? ' selected' : '') + '>Payment Received</option>'
+      + '</select></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Delay (days)</label>'
+      + '<input type="number" id="rev-delay" value="' + rev.delayDays + '" min="0" max="14" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></div>'
+      + '</div>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;">'
+      + '<input type="checkbox" id="rev-auto" style="width:18px;height:18px;"' + (rev.autoSend ? ' checked' : '') + '>'
+      + '<div><strong style="font-size:13px;">Auto-Send Review Requests</strong><div style="font-size:11px;color:var(--text-light);">Automatically email clients after job/payment (requires SendGrid)</div></div></label>'
+      + '</div>';
+
+    // ── Regional Settings ──
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 16px;">Regional Settings</h3>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Country</label>'
+      + '<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:14px;">United States</div></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Timezone</label>'
+      + '<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:14px;">(GMT-05:00) America/New_York</div></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Date Format</label>'
+      + '<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:14px;">Jan 31, 2026</div></div>'
+      + '<div><label style="font-size:12px;font-weight:600;color:var(--text-light);display:block;margin-bottom:4px;">Time Format</label>'
+      + '<div style="padding:8px 12px;background:var(--bg);border-radius:6px;font-size:14px;">12 Hour (1:30 PM)</div></div>'
+      + '</div></div>';
+
+    // ── Connected Apps ──
+    var connectedApps = [
+      { name: 'SendGrid', status: !!(localStorage.getItem('bm-sendgrid-key')), desc: 'Email delivery' },
+      { name: 'Stripe', status: !!(localStorage.getItem('bm-stripe-key') || (typeof Stripe !== 'undefined')), desc: 'Payment processing' },
+      { name: 'Gusto', status: !!(localStorage.getItem('bm-gusto-api-key')), desc: 'Payroll' },
+      { name: 'AI Assistant', status: !!(localStorage.getItem('bm-claude-key')), desc: 'AI pricing & emails' },
+      { name: 'Dialpad', status: !!(localStorage.getItem('bm-dialpad-key')), desc: 'Phone system' },
+      { name: 'SendJim', status: !!(localStorage.getItem('bm-sendjim-key')), desc: 'Direct mail' }
+    ];
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<h3 style="margin:0 0 16px;">Connected Apps</h3>';
+    connectedApps.forEach(function(app) {
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;">'
+        + '<div style="display:flex;align-items:center;gap:10px;">'
+        + '<div style="width:8px;height:8px;border-radius:50%;background:' + (app.status ? 'var(--green-dark)' : '#ccc') + ';"></div>'
+        + '<div><strong style="font-size:13px;">' + app.name + '</strong>'
+        + '<div style="font-size:11px;color:var(--text-light);">' + app.desc + '</div></div>'
+        + '</div>'
+        + '<span style="font-size:12px;font-weight:600;color:' + (app.status ? 'var(--green-dark)' : 'var(--text-light)') + ';">' + (app.status ? 'Connected' : 'Not connected') + '</span>'
+        + '</div>';
+    });
+    html += '</div>';
 
     // Products & Services Catalog
     var allServices = DB.services.getAll();
@@ -102,30 +339,82 @@ var SettingsPage = {
       + '<div><h3 style="margin:0;">SendGrid Email</h3>'
       + '<div style="font-size:12px;color:' + (sgOk ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (sgOk ? '✅ Connected — automated emails active' : '⚠️ Not connected — paste your key below') + '</div>'
       + '</div></div>'
-      + '<div style="margin-bottom:8px;"><input type="text" id="sendgrid-key" value="' + sgKey + '" placeholder="SG.xxxxxxxxxxxxxxx..." style="width:100%;padding:10px;border:2px solid ' + (sgOk ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
+      + '<div style="margin-bottom:8px;"><input type="password" id="sendgrid-key" value="' + sgKey + '" placeholder="SG.xxxxxxxxxxxxxxx..." style="width:100%;padding:10px;border:2px solid ' + (sgOk ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
       + '<button onclick="var k=document.getElementById(\'sendgrid-key\').value.trim();if(!k){UI.toast(\'Paste your key first\',\'error\');return;}localStorage.setItem(\'bm-sendgrid-key\',k);if(typeof Email!==\'undefined\'){Email.apiKey=k;}UI.toast(\'SendGrid connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Key</button>'
-      + (sgOk ? '<button onclick="if(typeof Email!==\'undefined\'){Email.testSend();}else{Email={apiKey:localStorage.getItem(\'bm-sendgrid-key\')};fetch(\'https://api.sendgrid.com/v3/mail/send\',{method:\'POST\',headers:{\'Content-Type\':\'application/json\',\'Authorization\':\'Bearer \'+Email.apiKey},body:JSON.stringify({personalizations:[{to:[{email:\'info@peekskilltree.com\'}]}],from:{email:\'info@peekskilltree.com\',name:\'Branch Manager\'},subject:\'Test Email\',content:[{type:\'text/plain\',value:\'SendGrid is connected!\'}]})}).then(function(r){UI.toast(r.ok||r.status===202?\'Test sent! Check info@peekskilltree.com\':\'Failed: \'+r.status,r.ok||r.status===202?\'success\':\'error\');})}" style="background:#1a82e2;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Send Test Email</button>' : '')
-      + (sgOk ? '<button onclick="localStorage.removeItem(\'bm-sendgrid-key\');UI.toast(\'Key removed\');loadPage(\'settings\');" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
+      + (sgOk ? '<button onclick="if(typeof Email!==\'undefined\'){Email.send(\'info@peekskilltree.com\',\'Branch Manager Test\',\'SendGrid is connected and working!\').then(function(){UI.toast(\'Test sent! Check info@peekskilltree.com\');}).catch(function(e){UI.toast(\'Failed: \'+e.message,\'error\');});}else{UI.toast(\'Email module not loaded\',\'error\');}" style="background:#1a82e2;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Send Test Email</button>' : '')
+      + (sgOk ? '<button onclick="SettingsPage._removeKey(\'bm-sendgrid-key\',\'SendGrid\')" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
       + '</div>'
       + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Enables: automated quote follow-ups, invoice reminders, visit reminders, review requests. Free: 100 emails/day.</p>'
       + '</div>';
 
-    // Claude AI Assistant
+    // AI Assistant
     var aiKey = localStorage.getItem('bm-claude-key') || '';
     var aiOk = aiKey.length > 10;
     html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:2px solid ' + (aiOk ? 'var(--green-light)' : 'var(--border)') + ';margin-bottom:16px;">'
       + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
       + '<div style="width:40px;height:40px;background:linear-gradient(135deg,#D4A574,#C4956A);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;">🤖</div>'
-      + '<div><h3 style="margin:0;">Claude AI Assistant</h3>'
-      + '<div style="font-size:12px;color:' + (aiOk ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (aiOk ? '✅ Connected — AI estimates & emails active' : '⚠️ Not connected — paste your Anthropic API key') + '</div>'
+      + '<div><h3 style="margin:0;">AI Assistant</h3>'
+      + '<div style="font-size:12px;color:' + (aiOk ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (aiOk ? '✅ Connected — AI estimates & emails active' : '⚠️ Not connected — paste your AI API key') + '</div>'
       + '</div></div>'
       + '<div style="margin-bottom:8px;"><input type="password" id="claude-ai-key" value="' + aiKey + '" placeholder="sk-ant-api03-..." style="width:100%;padding:10px;border:2px solid ' + (aiOk ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
-      + '<button onclick="var k=document.getElementById(\'claude-ai-key\').value.trim();if(!k){UI.toast(\'Paste your key first\',\'error\');return;}localStorage.setItem(\'bm-claude-key\',k);if(typeof AI!==\'undefined\'){AI._apiKey=k;}UI.toast(\'Claude AI connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Key</button>'
-      + (aiOk ? '<button onclick="localStorage.removeItem(\'bm-claude-key\');UI.toast(\'Key removed\');loadPage(\'settings\');" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
+      + '<button onclick="var k=document.getElementById(\'claude-ai-key\').value.trim();if(!k){UI.toast(\'Paste your key first\',\'error\');return;}localStorage.setItem(\'bm-claude-key\',k);if(typeof AI!==\'undefined\'){AI._apiKey=k;}UI.toast(\'AI Assistant connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Key</button>'
+      + (aiOk ? '<button onclick="SettingsPage._removeKey(\'bm-claude-key\',\'AI Assistant\')" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
       + '</div>'
-      + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Get your key at console.anthropic.com → API Keys → Create Key (free tier available)</p>'
+      + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent);">console.anthropic.com</a> → API Keys → Create Key (free tier available)</p>'
+      + '</div>';
+
+    // ── Stripe Payment Link ──
+    var stripeLink = localStorage.getItem('bm-stripe-base-link') || '';
+    var stripeOkNow = stripeLink.length > 20;
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:2px solid ' + (stripeOkNow ? 'var(--green-light)' : 'var(--border)') + ';margin-bottom:16px;">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
+      + '<div style="width:40px;height:40px;background:#635BFF;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;">💳</div>'
+      + '<div><h3 style="margin:0;">Stripe Payments</h3>'
+      + '<div style="font-size:12px;color:' + (stripeOkNow ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (stripeOkNow ? '✅ Connected — clients can pay invoices online' : '⚠️ Not connected — paste your Stripe payment link') + '</div>'
+      + '</div></div>'
+      + '<div style="margin-bottom:8px;"><input type="text" id="stripe-link" value="' + stripeLink + '" placeholder="https://buy.stripe.com/xxxxxxxxxx" style="width:100%;padding:10px;border:2px solid ' + (stripeOkNow ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<button onclick="var k=document.getElementById(\'stripe-link\').value.trim();if(!k){UI.toast(\'Paste your Stripe link first\',\'error\');return;}if(!/^https:\\/\\/buy\\.stripe\\.com\\//.test(k)){UI.toast(\'Must be a buy.stripe.com link\',\'error\');return;}localStorage.setItem(\'bm-stripe-base-link\',k);UI.toast(\'Stripe connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Link</button>'
+      + (stripeOkNow ? '<button onclick="SettingsPage._removeKey(\'bm-stripe-base-link\',\'Stripe\')" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
+      + '</div>'
+      + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Create at <a href="https://dashboard.stripe.com/payment-links/create" target="_blank" style="color:var(--accent);">Stripe → Payment Links → New</a>. Set "Customer pays what they want" with a reasonable default. Redirect after payment to <code style="background:var(--bg);padding:1px 5px;border-radius:3px;font-size:10px;">https://peekskilltree.com/branchmanager/paid.html</code></p>'
+      + '</div>';
+
+    // ── Dialpad ──
+    var dialpadKey = localStorage.getItem('bm-dialpad-key') || '';
+    var dialpadOk = dialpadKey.length > 10;
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:2px solid ' + (dialpadOk ? 'var(--green-light)' : 'var(--border)') + ';margin-bottom:16px;">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
+      + '<div style="width:40px;height:40px;background:#7A49D6;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;">📞</div>'
+      + '<div><h3 style="margin:0;">Dialpad Phone / SMS</h3>'
+      + '<div style="font-size:12px;color:' + (dialpadOk ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (dialpadOk ? '✅ Connected — calls & texts log automatically' : '⚠️ Not connected — paste your Dialpad API token') + '</div>'
+      + '</div></div>'
+      + '<div style="margin-bottom:8px;"><input type="password" id="dialpad-key" value="' + dialpadKey + '" placeholder="dp_api_xxxxxxxxxxxx" style="width:100%;padding:10px;border:2px solid ' + (dialpadOk ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<button onclick="var k=document.getElementById(\'dialpad-key\').value.trim();if(!k){UI.toast(\'Paste your token first\',\'error\');return;}localStorage.setItem(\'bm-dialpad-key\',k);localStorage.setItem(\'bm-receptionist-settings\',JSON.stringify({connected:true}));if(typeof Dialpad!==\'undefined\'){Dialpad.apiKey=k;}UI.toast(\'Dialpad connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Token</button>'
+      + (dialpadOk ? '<button onclick="SettingsPage._removeKey(\'bm-dialpad-key\',\'Dialpad\')" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
+      + '</div>'
+      + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Get token at <a href="https://dialpad.com/accounts/api/keys" target="_blank" style="color:var(--accent);">dialpad.com → API Keys</a>. Also register a 10DLC number for SMS compliance.</p>'
+      + '</div>';
+
+    // ── Gusto ──
+    var gustoKey = localStorage.getItem('bm-gusto-api-key') || '';
+    var gustoOk = gustoKey.length > 10;
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:2px solid ' + (gustoOk ? 'var(--green-light)' : 'var(--border)') + ';margin-bottom:16px;">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">'
+      + '<div style="width:40px;height:40px;background:#F45D22;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;">💼</div>'
+      + '<div><h3 style="margin:0;">Gusto Payroll</h3>'
+      + '<div style="font-size:12px;color:' + (gustoOk ? 'var(--green-dark)' : '#e07c24') + ';font-weight:600;">' + (gustoOk ? '✅ Connected — payroll export enabled' : '⚠️ Not connected — API token optional, CSV export works without it') + '</div>'
+      + '</div></div>'
+      + '<div style="margin-bottom:8px;"><input type="password" id="gusto-key" value="' + gustoKey + '" placeholder="gst_access_token_xxxxxxx (optional)" style="width:100%;padding:10px;border:2px solid ' + (gustoOk ? 'var(--green-light)' : 'var(--border)') + ';border-radius:8px;font-size:14px;box-sizing:border-box;"></div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<button onclick="var k=document.getElementById(\'gusto-key\').value.trim();if(!k){UI.toast(\'Paste your token first\',\'error\');return;}localStorage.setItem(\'bm-gusto-api-key\',k);UI.toast(\'Gusto connected! ✅\');loadPage(\'settings\');" style="background:var(--green-dark);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">Save Token</button>'
+      + '<button onclick="loadPage(\'payroll\');" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Open Payroll</button>'
+      + (gustoOk ? '<button onclick="SettingsPage._removeKey(\'bm-gusto-api-key\',\'Gusto\')" style="background:none;border:1px solid var(--border);padding:10px 20px;border-radius:6px;font-size:13px;cursor:pointer;">Remove</button>' : '')
+      + '</div>'
+      + '<p style="font-size:11px;color:var(--text-light);margin-top:8px;">Sign up at <a href="https://gusto.com" target="_blank" style="color:var(--accent);">gusto.com</a> ($40/mo + $6/employee). API token is optional — BM Payroll page exports CSV you upload to Gusto manually each pay period. Get token from Gusto Dev Portal.</p>'
       + '</div>';
 
     // Photo Storage info
@@ -308,10 +597,10 @@ var SettingsPage = {
     }
     html += '</div>';
 
-    // Import from Jobber
+    // Import from previous system
     html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
-      + '<h3 style="margin-bottom:8px;">Import from Jobber</h3>'
-      + '<p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">Export CSVs from Jobber (Clients → More Actions → Export) and import them here.</p>'
+      + '<h3 style="margin-bottom:8px;">Import from previous system</h3>'
+      + '<p style="font-size:13px;color:var(--text-light);margin-bottom:16px;">Export CSVs from previous system (Clients → More Actions → Export) and import them here.</p>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
       + '<div>'
       + '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Clients CSV</label>'
@@ -380,6 +669,16 @@ var SettingsPage = {
       + '<a href="https://supabase.com/dashboard" target="_blank" class="btn btn-outline" style="font-size:12px;">Enable</a></div>'
       + '</div></div>';
 
+    // Admin Tools
+    html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
+      + '<h3 style="margin-bottom:14px;">Admin Tools</h3>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+      + '<button onclick="loadPage(\'permissions\')" style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:var(--text);"><span style="font-size:18px;">🛡</span><div>Permissions & Roles<div style="font-size:11px;font-weight:400;color:var(--text-light);margin-top:2px;">RBAC roles, 25 permissions</div></div></button>'
+      + '<button onclick="loadPage(\'customfields\')" style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:var(--text);"><span style="font-size:18px;">🔧</span><div>Custom Fields<div style="font-size:11px;font-weight:400;color:var(--text-light);margin-top:2px;">Add fields to clients, jobs, quotes</div></div></button>'
+      + '<button onclick="loadPage(\'backup\')" style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:var(--text);"><span style="font-size:18px;">💾</span><div>Backup & Restore<div style="font-size:11px;font-weight:400;color:var(--text-light);margin-top:2px;">Export/import all data</div></div></button>'
+      + '<button onclick="loadPage(\'import\')" style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;cursor:pointer;text-align:left;font-size:13px;font-weight:600;color:var(--text);"><span style="font-size:18px;">📥</span><div>Import Data<div style="font-size:11px;font-weight:400;color:var(--text-light);margin-top:2px;">CSV, Jobber, bulk import</div></div></button>'
+      + '</div></div>';
+
     // About
     html += '<div style="background:var(--white);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:16px;">'
       + '<h3 style="margin-bottom:12px;">About Branch Manager</h3>'
@@ -389,7 +688,7 @@ var SettingsPage = {
       + '<div><strong>Stack:</strong> Vanilla JS + Supabase + Stripe + MapLibre</div>'
       + '<div><strong>Storage:</strong> localStorage + Supabase cloud sync</div>'
       + '<div><strong>PWA:</strong> Installable, offline capable</div>'
-      + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;">Built for Second Nature Tree Service. Replaces Jobber ($50-130/mo) with a $0/mo custom solution.</div>'
+      + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;">Built for ' + BM_CONFIG.companyName + '. Replaces previous system ($50-130/mo) with a $0/mo custom solution.</div>'
       + '</div></div>';
 
     html += '</div>';
@@ -622,6 +921,21 @@ var SettingsPage = {
     navigator.clipboard.writeText(sql).then(function() { UI.toast('Expenses SQL copied — paste into Supabase SQL Editor!'); });
   },
 
+  _removeKey: function(storageKey, label) {
+    var existing = localStorage.getItem(storageKey);
+    if (!existing) {
+      UI.toast(label + ' key was not set', 'error');
+      return;
+    }
+    if (!confirm('Remove your ' + label + ' API key?\n\nYou can re-add it anytime.')) return;
+    localStorage.removeItem(storageKey);
+    // Also clear in-memory reference on the module
+    if (storageKey === 'bm-sendgrid-key' && typeof Email !== 'undefined') Email.apiKey = null;
+    if (storageKey === 'bm-claude-key' && typeof AI !== 'undefined') AI._apiKey = null;
+    UI.toast(label + ' key removed ✓');
+    loadPage('settings');
+  },
+
   saveCompany: function() {
     var fields = ['name','phone','email','address','licenses','website'];
     fields.forEach(function(f) {
@@ -722,15 +1036,78 @@ var SettingsPage = {
   _savePassword: function() {
     var current = document.getElementById('pw-current').value;
     var newPw = document.getElementById('pw-new').value;
-    var confirm = document.getElementById('pw-confirm').value;
+    var confirmPw = document.getElementById('pw-confirm').value;
+    if (!current) { UI.toast('Enter your current password', 'error'); return; }
     if (newPw.length < 8) { UI.toast('Password must be at least 8 characters', 'error'); return; }
-    if (newPw !== confirm) { UI.toast('Passwords do not match', 'error'); return; }
+    if (newPw !== confirmPw) { UI.toast('Passwords do not match', 'error'); return; }
+
+    // Verify current password
     var email = Auth.user ? Auth.user.email : '';
     var hashes = {};
     try { hashes = JSON.parse(localStorage.getItem('bm-auth-hashes') || '{}'); } catch(e) {}
+    var storedHash = hashes[email.toLowerCase()];
+    var defaultUsers = { 'info@peekskilltree.com': '28006cfd', 'crew@peekskilltree.com': '14b65440', 'doug@peekskilltree.com': '28006cfd' };
+    var expectedHash = storedHash || defaultUsers[email.toLowerCase()];
+    if (expectedHash && Auth._hash(current) !== expectedHash) {
+      UI.toast('Current password is incorrect', 'error');
+      return;
+    }
+
     hashes[email.toLowerCase()] = Auth._hash(newPw);
     localStorage.setItem('bm-auth-hashes', JSON.stringify(hashes));
     UI.closeModal();
-    UI.toast('Password updated! Use the new password next time you log in.');
+    UI.toast('Password updated!');
+  },
+
+  _saveWorkSettings: function() {
+    localStorage.setItem('bm-work-start', document.getElementById('ws-start').value);
+    localStorage.setItem('bm-work-end', document.getElementById('ws-end').value);
+    localStorage.setItem('bm-ot-threshold', document.getElementById('ws-ot').value);
+    localStorage.setItem('bm-pay-period', document.getElementById('ws-pay').value);
+    localStorage.setItem('bm-min-job-hrs', document.getElementById('ws-min-job').value);
+    localStorage.setItem('bm-crew-see-client', document.getElementById('ws-crew-client').checked ? 'true' : 'false');
+    // Save per-day business hours
+    ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'].forEach(function(day) {
+      var el = document.getElementById('bh-' + day);
+      if (el) localStorage.setItem('bm-bh-' + day, el.value.trim());
+    });
+    UI.toast('Work settings saved');
+  },
+
+  _saveNotifSettings: function() {
+    ['notif-quote-approved','notif-payment','notif-new-request','notif-overdue','notif-job-completed','notif-daily-summary'].forEach(function(id) {
+      localStorage.setItem('bm-' + id, document.getElementById(id).checked ? 'true' : 'false');
+    });
+    UI.toast('Notification preferences saved');
+  },
+
+  _saveQuoteDefaults: function() {
+    localStorage.setItem('bm-payment-terms', document.getElementById('qd-terms').value);
+    localStorage.setItem('bm-default-deposit', document.getElementById('qd-deposit').value);
+    localStorage.setItem('bm-quote-validity', document.getElementById('qd-validity').value);
+    localStorage.setItem('bm-show-line-prices', document.getElementById('qd-show-prices').checked ? 'true' : 'false');
+    UI.toast('Quote & invoice defaults saved');
+  },
+
+  _saveBookingSettings: function() {
+    ['bf-enabled','bf-auto-response','bf-require-phone','bf-require-address','bf-show-services'].forEach(function(id) {
+      localStorage.setItem('bm-booking-' + id.replace('bf-',''), document.getElementById(id).checked ? 'true' : 'false');
+    });
+    UI.toast('Booking settings saved');
+  },
+
+  _saveReviewSettings: function() {
+    localStorage.setItem('bm-review-google-url', document.getElementById('rev-google-url').value.trim());
+    localStorage.setItem('bm-review-send-after', document.getElementById('rev-send-after').value);
+    localStorage.setItem('bm-review-delay', document.getElementById('rev-delay').value);
+    localStorage.setItem('bm-review-auto', document.getElementById('rev-auto').checked ? 'true' : 'false');
+    UI.toast('Review settings saved');
+  },
+
+  _saveLocationSettings: function() {
+    localStorage.setItem('bm-gps-tracking', document.getElementById('loc-tracking').checked ? 'true' : 'false');
+    localStorage.setItem('bm-gps-work-only', document.getElementById('loc-work-only').checked ? 'true' : 'false');
+    localStorage.setItem('bm-geofence', document.getElementById('loc-geofence').checked ? 'true' : 'false');
+    UI.toast('Location settings saved');
   }
 };

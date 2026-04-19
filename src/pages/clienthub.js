@@ -14,10 +14,10 @@
 var ClientHub = {
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
@@ -190,7 +190,7 @@ var ClientHub = {
         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">'
           + '<div><strong>Invoice #' + inv.invoiceNumber + '</strong><br><span style="font-size:12px;color:var(--text-light);">Due: ' + UI.dateShort(inv.dueDate) + '</span></div>'
           + '<div style="text-align:right;"><div style="font-size:1.2rem;font-weight:800;color:var(--red);">' + UI.money(inv.balance) + '</div>'
-          + '<button class="btn btn-primary" style="font-size:11px;padding:4px 12px;margin-top:4px;" onclick="Stripe.sendPaymentLink(\'' + inv.id + '\')">Pay Now</button></div>'
+          + '<button class="btn btn-primary" style="font-size:11px;padding:4px 12px;margin-top:4px;" onclick="if(typeof Stripe!==\'undefined\'){Stripe.sendPaymentLink(\'' + inv.id + '\')}else{UI.toast(\'Payment not configured\',\'error\')}">Pay Now</button></div>'
           + '</div>';
       });
       html += '</div>';

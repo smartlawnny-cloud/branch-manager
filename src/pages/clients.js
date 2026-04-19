@@ -8,25 +8,55 @@ var ClientsPage = {
   _perPage: 50,
   _filter: 'all',
   _search: '',
-  _sort: 'name',
-  _sortDir: 1,
+  _sort: 'updatedAt',
+  _sortDir: -1,
   _tagFilter: '',
 
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
+  _pendingDetail: null,
+
   render: function() {
     var self = ClientsPage;
+    // Check if we need to show a detail immediately
+    if (self._pendingDetail) {
+      var _pid = self._pendingDetail;
+      self._pendingDetail = null;
+      setTimeout(function() { ClientsPage.showDetail(_pid); }, 50);
+    }
+    // Click handler with scroll detection — only fires on real taps, not scroll gestures
+    setTimeout(function() {
+      var cards = document.querySelectorAll('[data-cid]');
+      cards.forEach(function(card) {
+        if (card._bmHandled) return;
+        card._bmHandled = true;
+        var startX = 0, startY = 0, moved = false;
+        card.addEventListener('touchstart', function(e) {
+          var t = e.touches[0];
+          startX = t.clientX; startY = t.clientY; moved = false;
+        }, { passive: true });
+        card.addEventListener('touchmove', function(e) {
+          var t = e.touches[0];
+          if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) moved = true;
+        }, { passive: true });
+        card.addEventListener('click', function() {
+          if (moved) return; // scroll, not tap
+          var cid = this.getAttribute('data-cid');
+          if (cid) ClientsPage.showDetail(cid);
+        });
+      });
+    }, 100);
     var stats = DB.dashboard.getStats();
     var clients = self._getFiltered();
 
-    // Jobber-style stat cards row
+    // previous system-style stat cards row
     var now = new Date();
     var ago30 = new Date(); ago30.setDate(ago30.getDate()-30);
     var allClients = DB.clients.getAll();
@@ -34,7 +64,7 @@ var ClientsPage = {
     var newClients30 = allClients.filter(function(c){ return c.status==='active' && new Date(c.createdAt)>=ago30; }).length;
     var ytdClients = allClients.filter(function(c){ return new Date(c.createdAt).getFullYear()===now.getFullYear(); }).length;
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
+    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;background:var(--white);" class="stat-row">'
       // New leads
       + '<div onclick="ClientsPage.setFilter(\'lead\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
       + '<div style="font-size:14px;font-weight:700;">New leads</div>'
@@ -48,19 +78,14 @@ var ClientsPage = {
       + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + newClients30 + '</div>'
       + '</div>'
       // Total new clients YTD
-      + '<div onclick="ClientsPage.setFilter(\'all\')" style="padding:14px 16px;border-right:1px solid var(--border);cursor:pointer;">'
+      + '<div onclick="ClientsPage.setFilter(\'all\')" style="padding:14px 16px;cursor:pointer;">'
       + '<div style="font-size:14px;font-weight:700;">Total new clients</div>'
       + '<div style="font-size:12px;color:var(--text-light);">Year to date</div>'
       + '<div style="font-size:28px;font-weight:700;margin-top:4px;">' + ytdClients + '</div>'
       + '</div>'
-      // Total
-      + '<div style="padding:14px 16px;">'
-      + '<div style="font-size:14px;font-weight:700;">All clients</div>'
-      + '<div style="font-size:28px;font-weight:700;margin-top:12px;">' + stats.totalClients + '</div>'
-      + '</div>'
       + '</div>';
 
-    // Jobber-style header + filter/search
+    // previous system-style header + filter/search
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
       + '<h3 style="font-size:16px;font-weight:700;margin:0;">Clients</h3>'
@@ -77,6 +102,7 @@ var ClientsPage = {
       + '<span style="color:var(--text-light);">🔍</span>'
       + '<input type="text" id="client-search" placeholder="Search clients..." value="' + UI.esc(self._search) + '" oninput="ClientsPage.setSearch(this.value)">'
       + '</div>'
+      + '<button onclick="loadPage(\'clientmap\')" style="background:none;border:1px solid var(--border);padding:7px 12px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--accent);white-space:nowrap;" title="View client map">📍 Map</button>'
       + '<button class="btn btn-primary" onclick="ClientsPage.showForm()" style="font-size:13px;white-space:nowrap;">+ New Client</button>'
       + '</div></div>';
 
@@ -92,30 +118,53 @@ var ClientsPage = {
     // Paginated slice
     var pageClients = clients.slice(self._page * self._perPage, (self._page + 1) * self._perPage);
 
-    // Table with sortable headers
-    html += '<div style="background:var(--white);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'
-      + '<table class="data-table" id="clients-table"><thead><tr>'
-      + self._sortHeader('Name', 'name')
-      + self._sortHeader('Address', 'address')
-      + self._sortHeader('Phone', 'phone')
-      + self._sortHeader('Email', 'email')
-      + self._sortHeader('Status', 'status')
-      + '</tr></thead><tbody>';
-
+    // Card-style list (iOS/Airbnb vibe) — each client is a rounded card with spacing
     if (pageClients.length === 0) {
-      html += '<tr><td colspan="5">' + (self._search ? '<div style="text-align:center;padding:24px;color:var(--text-light);">No clients match "' + self._search + '"</div>' : UI.emptyState('👥', 'No clients yet', 'Add your first client or import from Jobber.', '+ Add Client', 'ClientsPage.showForm()')) + '</td></tr>';
+      html += self._search
+        ? '<div style="text-align:center;padding:40px 20px;color:var(--text-light);background:var(--white);border-radius:12px;border:1px solid var(--border);">No clients match "' + UI.esc(self._search) + '"</div>'
+        : UI.emptyState('👥', 'No clients yet', 'Add your first client or import.', '+ Add Client', 'ClientsPage.showForm()');
     } else {
+      html += '<div style="display:flex;flex-direction:column;gap:10px;">';
       pageClients.forEach(function(c) {
-        html += '<tr onclick="ClientsPage.showDetail(\'' + c.id + '\')" style="cursor:pointer;" data-status="' + c.status + '">'
-          + '<td><strong>' + UI.esc(c.name || '') + '</strong>' + (c.company ? '<br><span style="font-size:12px;color:var(--text-light);">' + UI.esc(c.company) + '</span>' : '') + (c.tags && c.tags.length ? '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;">' + c.tags.slice(0, 3).map(function(t) { return '<span style="padding:1px 7px;background:var(--green-bg);border-radius:8px;font-size:10px;font-weight:600;color:var(--green-dark);">' + UI.esc(t) + '</span>'; }).join('') + (c.tags.length > 3 ? '<span style="font-size:10px;color:var(--text-light);">+' + (c.tags.length - 3) + '</span>' : '') + '</div>' : '') + '</td>'
-          + '<td style="font-size:13px;color:var(--text-light);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.esc(c.address || '—') + '</td>'
-          + '<td style="white-space:nowrap;">' + UI.phone(c.phone) + '</td>'
-          + '<td style="font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis;">' + UI.esc(c.email || '—') + '</td>'
-          + '<td>' + UI.statusBadge(c.status) + '</td>'
-          + '</tr>';
+        var _lastAct = c.updatedAt || c.createdAt || '';
+        var _lastActLabel = _lastAct ? (function() {
+          var d = new Date(_lastAct); var now = new Date();
+          var days = Math.floor((now - d) / 86400000);
+          if (days === 0) return 'Today';
+          if (days === 1) return 'Yesterday';
+          if (days < 7) return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+          return UI.dateShort(_lastAct);
+        })() : '';
+        var initials = (c.name || '')
+          .split(/\s+/).filter(Boolean).slice(0, 2)
+          .map(function(w) { return w.charAt(0).toUpperCase(); }).join('') || '?';
+        var statusColor = c.status === 'active' ? '#2e7d32' : c.status === 'lead' ? '#e07c24' : '#9e9e9e';
+        html += '<div class="client-card" data-status="' + c.status + '" data-cid="' + c.id + '" '
+          + 'style="background:var(--white);border:1px solid var(--border);border-radius:14px;padding:14px 16px;cursor:pointer;'
+          + 'box-shadow:0 1px 3px rgba(0,0,0,0.04);transition:box-shadow .15s,transform .1s;display:flex;align-items:center;gap:14px;-webkit-tap-highlight-color:transparent;">'
+          // Avatar circle
+          + '<div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,' + statusColor + '22,' + statusColor + '44);color:' + statusColor + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;">' + initials + '</div>'
+          // Main content
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap;">'
+          + '<strong style="font-size:15px;color:var(--text);">' + UI.esc(c.name || 'Unnamed') + '</strong>'
+          + UI.statusBadge(c.status)
+          + '</div>'
+          + (c.company ? '<div style="font-size:12px;color:var(--text-light);">' + UI.esc(c.company) + '</div>' : '')
+          + (c.address ? '<div style="font-size:13px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📍 ' + UI.esc(c.address) + '</div>' : '')
+          + (c.tags && c.tags.length ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">' + c.tags.slice(0, 3).map(function(t) {
+              return '<span style="padding:1px 7px;background:var(--green-bg);border-radius:8px;font-size:10px;font-weight:600;color:var(--green-dark);">' + UI.esc(t) + '</span>';
+            }).join('') + (c.tags.length > 3 ? '<span style="font-size:10px;color:var(--text-light);">+' + (c.tags.length - 3) + '</span>' : '') + '</div>' : '')
+          + '</div>'
+          // Right-side metadata
+          + '<div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;gap:2px;">'
+          + (_lastActLabel ? '<div style="font-size:11px;color:var(--text-light);">' + _lastActLabel + '</div>' : '')
+          + '<div style="font-size:18px;color:var(--text-light);">›</div>'
+          + '</div>'
+          + '</div>';
       });
+      html += '</div>';
     }
-    html += '</tbody></table></div>';
 
     // Pagination
     var totalPages = Math.ceil(clients.length / self._perPage);
@@ -318,6 +367,99 @@ var ClientsPage = {
     }
   },
 
+  _showContactPicker: function(clientId) {
+    var c = DB.clients.getById(clientId);
+    if (!c || !c.phone) return;
+    var phoneClean = c.phone.replace(/\D/g, '');
+    var telHref = 'tel:' + phoneClean;
+    var smsHref = 'sms:' + phoneClean;
+    var name = (c.name || '').replace(/'/g, "\\'");
+    var dialpadConnected = false;
+    try { dialpadConnected = !!JSON.parse(localStorage.getItem('bm-receptionist-settings') || '{}').connected; } catch(e) {}
+
+    var html = '<div style="padding:8px 4px;">'
+      + '<div style="font-size:22px;font-weight:700;margin-bottom:4px;">' + UI.esc(c.name || 'Contact') + '</div>'
+      + '<div style="font-size:15px;color:var(--text-light);margin-bottom:20px;">' + UI.phone(c.phone) + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      // Call
+      + '<a href="' + telHref + '" onclick="UI.closeModal();' + (dialpadConnected ? 'Dialpad.call(\'' + phoneClean + '\',\'' + clientId + '\',\'' + name + '\');' : '') + '" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;background:var(--green-dark);color:#fff;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;">'
+      + '<span style="font-size:32px;">📞</span><span>Call</span></a>'
+      // Text
+      + '<a href="' + smsHref + '" onclick="' + (dialpadConnected ? 'event.preventDefault();UI.closeModal();Dialpad.showTextModal(\'' + clientId + '\',\'' + name + '\',\'' + phoneClean + '\');' : 'UI.closeModal();') + '" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;background:#7c3aed;color:#fff;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;">'
+      + '<span style="font-size:32px;">💬</span><span>Text</span></a>'
+      + '</div>'
+      + (dialpadConnected ? '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:14px;">Dialpad connected — calls & texts will sync to your inbox</div>' : '<div style="font-size:11px;color:var(--text-light);text-align:center;margin-top:14px;">Opens your phone\'s dialer. <a onclick="UI.closeModal();loadPage(\'receptionist\')" style="color:var(--accent);cursor:pointer;">Connect Dialpad</a> to log calls/texts automatically.</div>')
+      + '</div>';
+
+    UI.showModal('Contact ' + (c.name || ''), html, {
+      footer: '<button class="btn btn-outline" onclick="UI.closeModal()">Close</button>'
+    });
+  },
+
+  // Import contact from iPhone — pre-fills the New Client form
+  _importVCard: function() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.vcf,text/vcard,text/x-vcard';
+    input.onchange = function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var vcf = ev.target.result;
+        var p = ClientsPage._parseVCard(vcf);
+        if (!p.name && !p.phones.length && !p.emails.length) {
+          UI.toast('Could not parse contact', 'error');
+          return;
+        }
+        // Pre-fill the existing form
+        var first = p.firstName || (p.name || '').split(' ')[0] || '';
+        var last = p.lastName || (p.name || '').split(' ').slice(1).join(' ') || '';
+        var phoneEl = document.getElementById('c-phone');
+        var emailEl = document.getElementById('c-email');
+        var addrEl = document.getElementById('c-address');
+        var coEl = document.getElementById('c-company');
+        var firstEl = document.getElementById('c-first');
+        var lastEl = document.getElementById('c-last');
+        if (firstEl && !firstEl.value) firstEl.value = first;
+        if (lastEl && !lastEl.value) lastEl.value = last;
+        if (phoneEl && !phoneEl.value && p.phones[0]) phoneEl.value = p.phones[0];
+        if (emailEl && !emailEl.value && p.emails[0]) emailEl.value = p.emails[0];
+        if (addrEl && !addrEl.value && p.addresses[0]) addrEl.value = p.addresses[0];
+        if (coEl && !coEl.value && p.org) coEl.value = p.org;
+        UI.toast('Contact imported — review & save');
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  },
+
+  _parseVCard: function(text) {
+    var lines = text.replace(/\r\n[ \t]/g, '').split(/\r?\n/);
+    var d = { name: '', firstName: '', lastName: '', phones: [], emails: [], addresses: [], org: '' };
+    lines.forEach(function(line) {
+      var m = line.match(/^([A-Z]+)(;[^:]+)?:(.+)$/i);
+      if (!m) return;
+      var field = m[1].toUpperCase();
+      var value = m[3];
+      if (field === 'FN') d.name = value.trim();
+      else if (field === 'N') {
+        var parts = value.split(';');
+        d.lastName = (parts[0] || '').trim();
+        d.firstName = (parts[1] || '').trim();
+      }
+      else if (field === 'TEL') d.phones.push(value.replace(/[^\d+]/g, '').replace(/^\+?1/, ''));
+      else if (field === 'EMAIL') d.emails.push(value.trim());
+      else if (field === 'ADR') {
+        var a = value.split(';');
+        var addr = [a[2], a[3], a[4], a[5]].filter(Boolean).join(', ');
+        if (addr) d.addresses.push(addr);
+      }
+      else if (field === 'ORG') d.org = value.split(';')[0].trim();
+    });
+    return d;
+  },
+
   _showPortalMenu: function(clientId) {
     var c = DB.clients.getById(clientId);
     if (!c) return;
@@ -397,8 +539,24 @@ var ClientsPage = {
     var c = id ? DB.clients.getById(id) : {};
     var title = id ? 'Edit Client' : 'New Client';
 
+    // Split existing name into first/last if present (for edits)
+    var _fn = c.firstName || '';
+    var _ln = c.lastName || '';
+    if (!_fn && !_ln && c.name) {
+      var _parts = (c.name || '').trim().split(/\s+/);
+      _fn = _parts[0] || '';
+      _ln = _parts.slice(1).join(' ') || '';
+    }
+
     var html = '<form id="client-form" onsubmit="ClientsPage.save(event, \'' + (id || '') + '\')">'
-      + UI.formField('Name *', 'text', 'c-name', c.name, { required: true, placeholder: 'Full name' })
+      + (id ? '' : '<div style="background:var(--bg);border:1px dashed var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+        + '<div style="font-size:13px;color:var(--text-light);">📇 Import from iPhone Contacts (vCard)</div>'
+        + '<button type="button" class="btn btn-outline" style="font-size:12px;padding:6px 12px;" onclick="ClientsPage._importVCard()">Import .vcf</button>'
+        + '</div>')
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      + UI.formField('First Name *', 'text', 'c-first', _fn, { required: true, placeholder: 'First' })
+      + UI.formField('Last Name', 'text', 'c-last', _ln, { placeholder: 'Last' })
+      + '</div>'
       + UI.formField('Company', 'text', 'c-company', c.company, { placeholder: 'Company name (optional)' })
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
       + UI.formField('Phone *', 'tel', 'c-phone', c.phone, { required: true, placeholder: '(914) 555-0000' })
@@ -419,8 +577,13 @@ var ClientsPage = {
 
   save: function(e, id) {
     e.preventDefault();
+    var _fn = (document.getElementById('c-first') || {}).value || '';
+    var _ln = (document.getElementById('c-last') || {}).value || '';
+    _fn = _fn.trim(); _ln = _ln.trim();
     var data = {
-      name: document.getElementById('c-name').value.trim(),
+      firstName: _fn,
+      lastName: _ln,
+      name: (_fn + ' ' + _ln).trim(),
       company: document.getElementById('c-company').value.trim(),
       phone: document.getElementById('c-phone').value.trim(),
       email: document.getElementById('c-email').value.trim(),
@@ -452,8 +615,28 @@ var ClientsPage = {
   },
 
   showDetail: function(id) {
+    try { return ClientsPage._showDetailImpl(id); }
+    catch(err) {
+      console.error('[ClientsPage.showDetail] ERROR:', err);
+      alert('Error opening client: ' + (err && err.message ? err.message : err) + '\n\nSee console for details.');
+      var pc = document.getElementById('pageContent');
+      if (pc) pc.innerHTML = '<div style="padding:20px;"><h2>Error loading client</h2><pre style="background:#fee;padding:12px;border-radius:8px;overflow:auto;">' + (err && err.stack ? err.stack : String(err)) + '</pre><button onclick="loadPage(\'clients\')" style="padding:10px 20px;background:#1b5e20;color:#fff;border:none;border-radius:8px;">← Back to Clients</button></div>';
+    }
+  },
+
+  _showDetailImpl: function(id) {
+    console.log('[ClientsPage.showDetail] called with id:', id);
     var c = DB.clients.getById(id);
-    if (!c) return;
+    if (!c) {
+      console.warn('[ClientsPage] Client not found:', id);
+      if (typeof UI !== 'undefined' && UI.toast) UI.toast('Client not found: ' + id, 'error');
+      else alert('Client not found: ' + id);
+      return;
+    }
+    // Scroll to top so user sees the detail
+    window.scrollTo(0, 0);
+    var scrollable = document.querySelector('.content') || document.querySelector('.main');
+    if (scrollable) scrollable.scrollTop = 0;
 
     // Get related records (match by clientId OR clientName since imports may not have IDs linked)
     var cName = (c.name || '').trim().toLowerCase();
@@ -467,11 +650,11 @@ var ClientsPage = {
     var sortedJobsByDate = clientJobs.slice().sort(function(a, b) { return (b.scheduledDate || b.createdAt || '') > (a.scheduledDate || a.createdAt || '') ? 1 : -1; });
     var lastJobDate = sortedJobsByDate.length ? (sortedJobsByDate[0].scheduledDate || sortedJobsByDate[0].createdAt) : null;
 
-    // Jobber-style client detail
+    // previous system-style client detail
     var html = ''
       // Breadcrumb
       + '<div style="font-size:13px;color:var(--text-light);margin-bottom:12px;">'
-      + '<a onclick="loadPage(\'clients\')" style="color:var(--text-light);cursor:pointer;text-decoration:none;">Second Nature Tree</a>'
+      + '<a onclick="loadPage(\'clients\')" style="color:var(--text-light);cursor:pointer;text-decoration:none;">' + BM_CONFIG.companyName + '</a>'
       + ' | <span style="color:var(--text);">' + UI.esc(c.name) + '</span></div>'
 
       // Action buttons (right-aligned)
@@ -484,7 +667,7 @@ var ClientsPage = {
       + '<button class="btn btn-outline" style="font-size:12px;" onclick="ClientsPage.showStatement(\'' + id + '\')">📄 Statement</button>'
       + '</div>'
 
-      // Client name (big, like Jobber)
+      // Client name (big, like previous system)
       + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">'
       + '<div style="width:48px;height:48px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-light);">👤</div>'
       + '<h2 style="font-size:28px;font-weight:700;">' + UI.esc(c.name) + '</h2>'
@@ -527,10 +710,10 @@ var ClientsPage = {
       + '<h3 style="font-size:18px;font-weight:700;">Properties</h3>'
       + '<button class="btn btn-outline" style="font-size:12px;padding:5px 12px;" onclick="ClientsPage.showForm(\'' + id + '\')">+ New Property</button>'
       + '</div>'
-      + (c.address ? '<div style="display:flex;gap:12px;align-items:start;">'
-        + '<div style="width:36px;height:36px;border-radius:8px;background:#e8f5e9;display:flex;align-items:center;justify-content:center;color:#2e7d32;">📍</div>'
-        + '<div style="font-size:14px;line-height:1.6;">' + UI.esc(c.address).replace(/,/g, '<br>') + '</div>'
-        + '</div>' : '<div style="color:var(--text-light);font-size:13px;">No property address</div>')
+      + (c.address ? '<a href="https://maps.apple.com/?daddr=' + encodeURIComponent(c.address) + '" target="_blank" style="display:flex;gap:12px;align-items:start;text-decoration:none;color:inherit;padding:4px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'">'
+        + '<div style="width:36px;height:36px;border-radius:8px;background:#e8f5e9;display:flex;align-items:center;justify-content:center;color:#2e7d32;flex-shrink:0;">📍</div>'
+        + '<div style="font-size:14px;line-height:1.6;flex:1;">' + UI.esc(c.address).replace(/,/g, '<br>') + '<div style="font-size:11px;color:var(--accent);margin-top:2px;">Open in Maps →</div></div>'
+        + '</a>' : '<div style="color:var(--text-light);font-size:13px;">No property address</div>')
       + '</div>'
 
       // Schedule section
@@ -603,7 +786,7 @@ var ClientsPage = {
       + '<div style="margin-bottom:16px;">'
       + '<h3 style="font-size:18px;font-weight:700;margin-bottom:12px;">Contact info</h3>'
       + '<table style="width:100%;font-size:14px;border-collapse:collapse;">'
-      + (c.phone ? '<tr><td style="padding:8px 0;color:var(--text-light);width:60px;">Main</td><td style="padding:8px 0;"><a href="tel:' + c.phone.replace(/\D/g,'') + '" style="color:var(--text);text-decoration:none;">' + UI.phone(c.phone) + '</a></td></tr>' : '')
+      + (c.phone ? '<tr><td style="padding:8px 0;color:var(--text-light);width:60px;">Main</td><td style="padding:8px 0;"><a onclick="ClientsPage._showContactPicker(\'' + id + '\')" style="color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;">' + UI.phone(c.phone) + '</a> <span style="font-size:11px;color:var(--text-light);margin-left:6px;">tap to call/text</span></td></tr>' : '')
       + (c.email ? '<tr><td style="padding:8px 0;color:var(--text-light);">Main</td><td style="padding:8px 0;"><a href="mailto:' + c.email + '" style="color:#1565c0;text-decoration:none;">' + c.email + '</a></td></tr>' : '')
       + '<tr><td style="padding:8px 0;color:var(--text-light);">Status</td><td style="padding:8px 0;">' + UI.statusBadge(c.status) + '</td></tr>'
       + '<tr><td style="padding:8px 0;color:var(--text-light);">Revenue</td><td style="padding:8px 0;font-weight:600;">' + UI.moneyInt(totalRevenue) + '</td></tr>'
@@ -674,10 +857,15 @@ var ClientsPage = {
 
       // Quotes tab
       + '<div id="cd-quotes" class="cd-panel" style="display:none;">'
-      + (clientQuotes.length ? '<table class="data-table"><thead><tr><th>#</th><th>Description</th><th>Status</th><th>Total</th></tr></thead><tbody>'
-        + clientQuotes.map(function(q) {
-          return '<tr style="cursor:pointer;" onclick="QuotesPage.showDetail(\'' + q.id + '\')"><td><strong>' + (q.quoteNumber || '—') + '</strong></td><td>' + UI.esc(q.description || '—') + '</td><td>' + UI.statusBadge(q.status) + '</td><td style="font-weight:600;">' + UI.money(q.total) + '</td></tr>';
-        }).join('') + '</tbody></table>' : UI.emptyState('📋', 'No quotes yet', 'Create a quote for this client.', '+ New Quote', 'QuotesPage.showForm(null,\'' + id + '\')'))
+      + (clientQuotes.length ? (function() {
+          var sortedQ = clientQuotes.slice().sort(function(a,b){ return (b.createdAt||'') > (a.createdAt||'') ? 1 : -1; });
+          return '<table class="data-table"><thead><tr><th>#</th><th>Date</th><th>Description</th><th>Status</th><th>Total</th></tr></thead><tbody>'
+            + sortedQ.map(function(q) {
+              return '<tr style="cursor:pointer;" onclick="QuotesPage._pendingDetail=\'' + q.id + '\';loadPage(\'quotes\')"><td><strong>' + (q.quoteNumber || '—') + '</strong></td>'
+                + '<td style="white-space:nowrap;color:var(--text-light);font-size:12px;">' + UI.dateShort(q.createdAt) + '</td>'
+                + '<td>' + UI.esc(q.description || '—') + '</td><td>' + UI.statusBadge(q.status) + '</td><td style="font-weight:600;">' + UI.money(q.total) + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        })() : UI.emptyState('📋', 'No quotes yet', 'Create a quote for this client.', '+ New Quote', 'QuotesPage.showForm(null,\'' + id + '\')'))
       + '</div>'
 
       // Invoices tab — last 10, sorted newest first

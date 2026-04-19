@@ -5,10 +5,10 @@
 var Workflow = {
   _co: function() {
     return {
-      name: localStorage.getItem('bm-co-name') || 'Second Nature Tree Service',
-      phone: localStorage.getItem('bm-co-phone') || '(914) 391-5233',
-      email: localStorage.getItem('bm-co-email') || 'info@peekskilltree.com',
-      website: localStorage.getItem('bm-co-website') || 'peekskilltree.com'
+      name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
+      phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
+      email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
+      website: localStorage.getItem('bm-co-website') || BM_CONFIG.website
     };
   },
 
@@ -128,8 +128,8 @@ var Workflow = {
       status: 'scheduled',
       quoteId: quoteId,
       lineItems: quote.lineItems || [],
-      source: 'quote',
-      jobNumber: DB.jobs.getAll().length + 1
+      taxRate: quote.taxRate || parseFloat(localStorage.getItem('bm-tax-rate')) || 8.375,
+      source: 'quote'
     });
 
     // Update quote status
@@ -157,7 +157,7 @@ var Workflow = {
       status: 'draft',
       jobId: jobId,
       lineItems: job.lineItems || [],
-      dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+      dueDate: (function() { var payTerms = localStorage.getItem('bm-payment-terms') || 'net30'; var daysDue = payTerms === 'due-on-completion' ? 0 : payTerms === 'net15' ? 15 : payTerms === 'net60' ? 60 : 30; return new Date(Date.now() + daysDue * 86400000).toISOString().split('T')[0]; })()
     });
 
     // Update job status
@@ -499,6 +499,9 @@ var Workflow = {
     if (typeof Email !== 'undefined' && Email.isConfigured()) {
       Email.send(to, subject, body, options).then(function(result) {
         if (callback) callback(result && result.success);
+      }).catch(function(err) {
+        console.error('[Workflow] Email.send failed:', err);
+        if (callback) callback(false);
       });
     } else {
       if (callback) callback(false);

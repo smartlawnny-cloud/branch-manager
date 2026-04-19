@@ -7,16 +7,16 @@ var FormBuilderPage = {
 
   _STORAGE_KEY: 'bm-form-config',
   _SUPABASE_URL: 'https://ltpivkqahvplapyagljt.supabase.co',
-  _SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI',
+  _SUPABASE_KEY: (typeof SupabaseDB !== 'undefined' && SupabaseDB.ANON_KEY) || '',
 
   _defaultConfig: function() {
     return {
-      title: 'Second Nature Tree Service',
-      subtitle: 'Peekskill, NY — Licensed & Insured',
+      title: BM_CONFIG.companyName,
+      subtitle: BM_CONFIG.city + ' — ' + BM_CONFIG.tagline,
       buttonText: 'Request Free Estimate',
       successTitle: 'Request Received!',
       successMessage: "Thanks! We'll review your request and get back to you within 2 hours during business hours.",
-      notifyEmail: 'info@peekskilltree.com',
+      notifyEmail: BM_CONFIG.email,
       fields: [
         { id: 'f1', label: 'Your Name', type: 'text', placeholder: 'First and last name', required: true },
         { id: 'f2', label: 'Phone Number', type: 'tel', placeholder: '(914) 555-1234', required: true },

@@ -19,7 +19,17 @@ var DB = (function() {
     try { return JSON.parse(localStorage.getItem(key)) || []; } catch(e) { return []; }
   }
   function _set(key, data) {
-    try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {}
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch(e) {
+      // localStorage quota exceeded — warn user
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.error('localStorage full! Data may not be saved for: ' + key);
+        if (typeof UI !== 'undefined' && UI.toast) {
+          UI.toast('Storage full — some data may not save. Clear old data in Settings.', 'error');
+        }
+      }
+    }
   }
   function _id() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
   function _now() { return new Date().toISOString(); }
@@ -46,6 +56,52 @@ var DB = (function() {
   // ── Generic CRUD ──
   function getAll(key) { return _get(key); }
   function getById(key, id) { return _get(key).find(function(r) { return r.id === id; }) || null; }
+  // Map localStorage keys to Supabase table names
+  var REMOTE_TABLE = {
+    'bm-clients': 'clients',
+    'bm-requests': 'requests',
+    'bm-quotes': 'quotes',
+    'bm-jobs': 'jobs',
+    'bm-invoices': 'invoices',
+    'bm-services': 'services',
+    'bm-team': 'team_members'
+  };
+
+  function _pushToCloud(key, record, method) {
+    try {
+      var table = REMOTE_TABLE[key];
+      if (!table) return;
+      // If a full cloud pull is in progress, defer the push so it can't be overwritten
+      if (window._bmSyncLock) {
+        console.log('[DB push] sync lock active, deferring', table, record.id);
+        setTimeout(function() { _pushToCloud(key, record, method); }, 500);
+        return;
+      }
+      var url = localStorage.getItem('bm-supabase-url') || 'https://ltpivkqahvplapyagljt.supabase.co';
+      var apiKey = localStorage.getItem('bm-supabase-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI';
+      if (!url || !apiKey) return;
+
+      // Convert camelCase to snake_case for Supabase
+      var snakeRow = {};
+      Object.keys(record).forEach(function(k) {
+        var sk = k.replace(/([A-Z])/g, '_$1').toLowerCase();
+        snakeRow[sk] = record[k];
+      });
+
+      // Use upsert to handle both insert and update
+      fetch(url + '/rest/v1/' + table + '?on_conflict=id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+          'Authorization': 'Bearer ' + apiKey,
+          'Prefer': 'resolution=merge-duplicates,return=minimal'
+        },
+        body: JSON.stringify(snakeRow)
+      }).catch(function(e) { console.warn('[DB cloud push]', table, e); });
+    } catch(e) { console.warn('[DB cloud push] error', e); }
+  }
+
   function create(key, record) {
     var all = _get(key);
     record.id = record.id || _id();
@@ -54,6 +110,7 @@ var DB = (function() {
     all.unshift(record);
     _set(key, all);
     _audit('create', key, record.id, record.name || record.clientName || '');
+    _pushToCloud(key, record, 'create');
     return record;
   }
   function update(key, id, changes) {
@@ -63,6 +120,7 @@ var DB = (function() {
     Object.assign(all[idx], changes, { updatedAt: _now() });
     _set(key, all);
     _audit('update', key, id, Object.keys(changes).join(','));
+    _pushToCloud(key, all[idx], 'update');
     return all[idx];
   }
   function remove(key, id) {
@@ -70,6 +128,25 @@ var DB = (function() {
     _audit('delete', key, id, item ? (item.name || item.clientName || '') : '');
     var all = _get(key).filter(function(r) { return r.id !== id; });
     _set(key, all);
+    _deleteFromCloud(key, id);
+  }
+
+  function _deleteFromCloud(key, id) {
+    try {
+      var table = REMOTE_TABLE[key];
+      if (!table || !id) return;
+      if (window._bmSyncLock) {
+        setTimeout(function() { _deleteFromCloud(key, id); }, 500);
+        return;
+      }
+      var url = localStorage.getItem('bm-supabase-url') || 'https://ltpivkqahvplapyagljt.supabase.co';
+      var apiKey = localStorage.getItem('bm-supabase-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0cGl2a3FhaHZwbGFweWFnbGp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTgxNzIsImV4cCI6MjA4OTY3NDE3Mn0.bQ-wAx4Uu-FyA2ZwsTVfFoU2ZPbeWCmupqV-6ZR9uFI';
+      if (!url || !apiKey) return;
+      fetch(url + '/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { 'apikey': apiKey, 'Authorization': 'Bearer ' + apiKey }
+      }).catch(function(e) { console.warn('[DB cloud delete]', table, e); });
+    } catch(e) { console.warn('[DB cloud delete] error', e); }
   }
   function count(key, filterFn) {
     var all = _get(key);
