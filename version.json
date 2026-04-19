@@ -1,5 +1,5 @@
 {
-  "version": 163,
+  "version": 164,
   "released": "2026-04-19",
-  "notes": "Request→Client auto-link, 10X summary in Reports, white-label cleanup, self-healing version check"
+  "notes": "4 new 10X tools, 31 missing Jobber records inserted, multi-tenant migration SQL + rollout plan"
 }

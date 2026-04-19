@@ -268,6 +268,114 @@ var CardoneTools = {
           + '</div>'
         );
 
+    // ── 10. Power Planner — daily activity targets ──
+    var targetHours = Number(d.targetHours) || 10;
+    var callsPerHour = Number(d.callsPerHour) || 5;
+    var dailyCalls = targetHours * callsPerHour;
+    var weeklyCalls = dailyCalls * 6;
+    var monthlyCalls = dailyCalls * 25;
+    var contactPct = Number(d.contactPct) || 30;
+    var qualifiedContacts = monthlyCalls * (contactPct/100);
+    var monthlyEstimates = qualifiedContacts * 0.4;
+    var monthlyCloses = monthlyEstimates * (closeR || 0.35);
+    var monthlyRev = monthlyCloses * (avgTicket || 1500);
+    html += ''
+      + self._card('📋 Power Planner — Hours × Calls × Revenue',
+          'Cardone: "Time is the only thing you can\'t manufacture." Map hours → calls → money.',
+          ''
+          + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
+          +   self._row('Hours of focused work/day', 'targetHours', 'number', targetHours, 'hr')
+          +   self._row('Outbound calls per hour', 'callsPerHour', 'number', callsPerHour, '#')
+          +   self._row('Contact rate % (answered)', 'contactPct', 'number', contactPct, '%')
+          + '</div>'
+          + '<div style="background:#eef2ff;border:1px solid #a5b4fc;border-radius:10px;padding:14px;margin-top:10px;">'
+          +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">'
+          +     self._mini('Calls / day', Math.round(dailyCalls).toLocaleString(), '#4338ca')
+          +     self._mini('Calls / week', Math.round(weeklyCalls).toLocaleString(), '#4338ca')
+          +     self._mini('Calls / month', Math.round(monthlyCalls).toLocaleString(), '#3730a3')
+          +     self._mini('Qual. contacts / mo', Math.round(qualifiedContacts).toLocaleString(), '#6366f1')
+          +     self._mini('Est. closes / mo', Math.round(monthlyCloses).toLocaleString(), '#059669')
+          +     self._mini('Projected monthly rev', self._money(monthlyRev), '#047857')
+          +   '</div>'
+          + '</div>'
+        );
+
+    // ── 11. Retirement / Freedom Number ──
+    var currentAge = Number(d.currentAge) || 40;
+    var retireAge = Number(d.retireAge) || 65;
+    var monthlyNeeded = Number(d.monthlyNeeded) || 15000;
+    var yearsToSave = Math.max(0, retireAge - currentAge);
+    // 25× rule — safe withdrawal
+    var freedomNumber = monthlyNeeded * 12 * 25;
+    var requiredAnnualSavings = yearsToSave > 0 ? (freedomNumber / yearsToSave) : 0; // no growth, worst case
+    var pctBusinessNeeded = revCurrent ? (requiredAnnualSavings / revCurrent * 100) : 0;
+    html += ''
+      + self._card('🏖 Freedom Number — How Much to Retire',
+          'Cardone\'s "Financial Freedom" target: 25× annual spending invested = passive income replacement. What does your business need to throw off?',
+          ''
+          + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">'
+          +   self._row('Your current age', 'currentAge', 'number', currentAge, 'yr')
+          +   self._row('Target retire age', 'retireAge', 'number', retireAge, 'yr')
+          +   self._row('Monthly income needed (today\'s $)', 'monthlyNeeded', 'number', monthlyNeeded, '$')
+          + '</div>'
+          + '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-top:10px;">'
+          +   self._stat('Freedom Number (25× rule)', self._money(freedomNumber), '#166534')
+          +   self._stat('Save / year to hit it', self._money(requiredAnnualSavings), '#15803d')
+          +   self._stat('% of current revenue', pctBusinessNeeded.toFixed(1) + '%', '#166534')
+          + '</div>'
+          + '<div style="font-size:12px;color:#15803d;margin-top:10px;">💡 If % of revenue is &gt; 30%, you need to either grow rev, cut costs, or extend timeline. This is WHY 10X matters.</div>'
+        );
+
+    // ── 12. Crew Utilization ──
+    var crewHoursAvail = Number(d.crewHoursAvail) || 40;
+    var crewHoursBilled = Number(d.crewHoursBilled) || 24;
+    var crewUtil = crewHoursAvail > 0 ? (crewHoursBilled / crewHoursAvail * 100) : 0;
+    var utilLabel = crewUtil >= 80 ? { label: 'OPTIMAL', color: '#059669', desc: 'Running tight — watch burnout' }
+                  : crewUtil >= 65 ? { label: 'HEALTHY', color: '#0891b2', desc: 'Room to take more jobs' }
+                  : crewUtil >= 50 ? { label: 'LOW', color: '#d97706', desc: 'Over-staffed or lead-starved' }
+                  : crewUtil > 0   ? { label: 'BLEEDING', color: '#dc2626', desc: 'You\'re paying people to do nothing' }
+                  :                   { label: '—', color: '#6b7280', desc: '' };
+    var idleCostMonthly = (crewHoursAvail - crewHoursBilled) * 4 * (Number(d.laborCost) || 35) * (employees || 1);
+    html += ''
+      + self._card('🏗 Crew Utilization — Idle Cost Killer',
+          'Billed hours ÷ available hours. Every unbilled hour is payroll you\'re bleeding.',
+          ''
+          + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">'
+          +   self._row('Crew hours available / week', 'crewHoursAvail', 'number', crewHoursAvail, 'hr')
+          +   self._row('Crew hours BILLED / week', 'crewHoursBilled', 'number', crewHoursBilled, 'hr')
+          +   self._row('Labor cost / hr (fully loaded)', 'laborCost', 'number', Number(d.laborCost) || 35, '$')
+          + '</div>'
+          + '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px;margin-top:10px;">'
+          +   self._stat('Utilization', self._pct(crewUtil), utilLabel.color)
+          +   '<div style="display:inline-block;margin-left:12px;padding:4px 12px;background:' + utilLabel.color + ';color:#fff;font-size:11px;font-weight:700;border-radius:12px;">' + utilLabel.label + '</div>'
+          +   '<div style="font-size:12px;color:#78350f;margin-top:8px;">' + utilLabel.desc + '</div>'
+          +   '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde68a;">'
+          +     self._stat('Monthly idle cost (all crew)', self._money(idleCostMonthly), '#b91c1c')
+          +   '</div>'
+          + '</div>'
+        );
+
+    // ── 13. Commitment Pledge ──
+    var pledgeSigned = d.pledgeSigned === '1' || d.pledgeSigned === true;
+    var pledgeDate = d.pledgeDate || '';
+    html += ''
+      + self._card('✍️ 10X Commitment Pledge',
+          'Cardone: "Write it down. Sign it. Read it daily." Declarations hold you accountable.',
+          '<div style="background:' + (pledgeSigned ? '#ecfdf5' : '#fafaf9') + ';border:2px solid ' + (pledgeSigned ? '#10b981' : '#d6d3d1') + ';border-radius:10px;padding:18px;line-height:1.7;font-size:14px;color:#1f2937;">'
+          + '<div style="font-style:italic;">'
+          +   '"I will not reduce my target — I will increase my actions.<br>'
+          +   'I commit to making more calls, giving more estimates, following up more often, and delivering more value than anyone in my market.<br>'
+          +   'My goal is <strong>' + (revCurrent > 0 ? self._money(rev10x) : '10× my current revenue') + '</strong> within 3 years. I will be obsessed with getting there."'
+          + '</div>'
+          + '<div style="display:flex;gap:10px;align-items:center;margin-top:14px;">'
+          +   (pledgeSigned
+                ? '<span style="color:#047857;font-weight:700;">✅ Signed ' + (pledgeDate || 'today') + '</span>'
+                : '<button onclick="CardoneTools._signPledge()" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">I COMMIT — Sign the Pledge</button>')
+          +   (pledgeSigned ? ' <button onclick="CardoneTools._unsignPledge()" style="background:none;border:1px solid #d4d4d8;padding:6px 12px;border-radius:6px;font-size:11px;cursor:pointer;color:#71717a;">Reset</button>' : '')
+          + '</div>'
+          + '</div>'
+        );
+
     // ── Cardone quotes footer ──
     html += ''
       + '<div style="background:#0f172a;color:#cbd5e1;border-radius:14px;padding:28px;margin:20px 0 40px;text-align:center;">'
@@ -300,6 +408,20 @@ var CardoneTools = {
     }, 0);
 
     return html;
+  },
+
+  _signPledge: function() {
+    var today = new Date().toLocaleDateString();
+    this._set('pledgeSigned', '1');
+    this._set('pledgeDate', today);
+    if (typeof UI !== 'undefined' && UI.toast) UI.toast('Pledge signed — now go get it. 💪');
+    if (window._currentPage === 'cardone') loadPage('cardone');
+  },
+  _unsignPledge: function() {
+    if (!confirm('Reset the pledge?')) return;
+    this._set('pledgeSigned', '');
+    this._set('pledgeDate', '');
+    if (window._currentPage === 'cardone') loadPage('cardone');
   },
 
   _debouncedRerender: function() {
