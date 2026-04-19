@@ -39,7 +39,7 @@ var SettingsPage = {
       name: localStorage.getItem('bm-co-name') || BM_CONFIG.companyName,
       phone: localStorage.getItem('bm-co-phone') || BM_CONFIG.phone,
       email: localStorage.getItem('bm-co-email') || BM_CONFIG.email,
-      address: localStorage.getItem('bm-co-address') || '1 Highland Industrial Park, Peekskill, NY 10566',
+      address: localStorage.getItem('bm-co-address') || (typeof BM_CONFIG !== 'undefined' ? BM_CONFIG.address : ''),
       licenses: localStorage.getItem('bm-co-licenses') || 'WC-32079, PC-50644',
       website: localStorage.getItem('bm-co-website') || BM_CONFIG.website,
       taxRate: localStorage.getItem('bm-tax-rate') || '8.375'
@@ -1081,7 +1081,11 @@ var SettingsPage = {
     var hashes = {};
     try { hashes = JSON.parse(localStorage.getItem('bm-auth-hashes') || '{}'); } catch(e) {}
     var storedHash = hashes[email.toLowerCase()];
-    var defaultUsers = { 'info@peekskilltree.com': '28006cfd', 'crew@peekskilltree.com': '14b65440', 'doug@peekskilltree.com': '28006cfd' };
+    // Default users are a first-install fallback only; real accounts use hashes stored in localStorage.
+    var defaultUsers = {};
+    if (typeof BM_CONFIG !== 'undefined' && BM_CONFIG.email) {
+      defaultUsers[BM_CONFIG.email.toLowerCase()] = '28006cfd';
+    }
     var expectedHash = storedHash || defaultUsers[email.toLowerCase()];
     if (expectedHash && Auth._hash(current) !== expectedHash) {
       UI.toast('Current password is incorrect', 'error');
