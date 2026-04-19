@@ -1,0 +1,5 @@
+{
+  "version": 162,
+  "released": "2026-04-19",
+  "notes": "Self-healing version check + forced cache-bust on stale clients"
+}
