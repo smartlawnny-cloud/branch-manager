@@ -1486,9 +1486,18 @@ if ('serviceWorker' in navigator) {
       } catch(e) { alert('Reset error: ' + e.message); }
     })();
   } else {
-    navigator.serviceWorker.register('sw.js').then(function(reg) {
+    // updateViaCache:'none' tells the browser NEVER to HTTP-cache sw.js itself
+    // (iOS PWA bug: without this, iOS holds the old sw.js for up to 24h and
+    // updates never land even when reg.update() fires).
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg) {
       // Check for SW update every time page loads
       reg.update();
+      // Also re-check when the PWA comes back to foreground (iOS re-focus)
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') { try { reg.update(); } catch(e){} }
+      });
+      // And every 15 minutes if the app stays open
+      setInterval(function() { try { reg.update(); } catch(e){} }, 15 * 60 * 1000);
       // If new SW waiting, activate it immediately
       if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
       reg.addEventListener('updatefound', function() {
