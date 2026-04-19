@@ -1,6 +1,6 @@
 // Branch Manager — Service Worker v9
 // Full offline support + push notifications
-var CACHE_NAME = 'branch-manager-v159';
+var CACHE_NAME = 'branch-manager-v160';
 
 // Allow the page to trigger immediate activation
 self.addEventListener('message', function(e) {
@@ -60,6 +60,7 @@ var ASSETS = [
   './src/pages/backup.js',
   './src/pages/search.js',
   './src/pages/estimator.js',
+  './src/pages/cardone.js',
   './src/pages/aitreeid.js',
   './src/pages/treemeasure.js',
   './src/pages/propertymap.js',

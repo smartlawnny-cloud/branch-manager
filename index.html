@@ -688,6 +688,7 @@
         <div class="nav-section">Tools</div>
         <button class="nav-item" data-page="ai"><span class="icon"><i data-lucide="bot" class="li"></i></span> AI Assistant</button>
         <button class="nav-item" data-page="calculators"><span class="icon"><i data-lucide="calculator" class="li"></i></span> Calculators</button>
+        <button class="nav-item" data-page="cardone"><span class="icon"><i data-lucide="trending-up" class="li"></i></span> 10X Tools</button>
         <button class="nav-item" data-page="aitreeid"><span class="icon"><i data-lucide="scan-eye" class="li"></i></span> AI Tree ID <span style="background:#7c3aed;color:#fff;padding:1px 6px;border-radius:6px;font-size:9px;font-weight:700;margin-left:4px;">BETA</span></button>
         <button class="nav-item" data-page="videoquote"><span class="icon"><i data-lucide="video" class="li"></i></span> Video Quote <span style="background:#7c3aed;color:#fff;padding:1px 6px;border-radius:6px;font-size:9px;font-weight:700;margin-left:4px;">BETA</span></button>
         <button class="nav-item" data-page="treemeasure"><span class="icon"><i data-lucide="ruler" class="li"></i></span> Tree Measure</button>
@@ -811,6 +812,7 @@
 <script defer src="src/pages/settings.js?v=151"></script>
 <script defer src="src/pages/propertymap.js?v=140"></script>
 <script defer src="src/pages/estimator.js"></script>
+<script defer src="src/pages/cardone.js?v=160"></script>
 <script defer src="src/pages/aitreeid.js?v=140"></script>
 <script defer src="src/pages/videoquote.js?v=140"></script>
 <script defer src="src/pages/treemeasure.js"></script>
@@ -905,6 +907,7 @@ var pageConfigs = {
   timesheet: { title: '⏱ Timesheet', action: null },
   automations: { title: '⚡ Automations', action: null },
   calculators: { title: '🧮 Calculators', action: null },
+  cardone: { title: '🚀 10X Tools', action: null },
   estimator: { title: '🌳 Job Estimator', action: null },
   aitreeid: { title: '🔍 AI Tree ID', action: null },
   videoquote: { title: '🎥 Video Quote', action: null },
@@ -1022,6 +1025,7 @@ var pageRenderers = {
   payroll: function() { return PayrollPage.render(); },
   permissions: function() { return RBAC.render(); },
   estimator: function() { return Estimator.render(); },
+  cardone: function() { return CardoneTools.render(); },
   calculators: function() {
     return '<div class="stat-grid">'
       + '<div class="stat-card" style="cursor:pointer;" onclick="loadPage(\'estimator\')">'
